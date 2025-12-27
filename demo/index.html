@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ja" data-bs-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EPG Widget Demo</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+      integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+      crossorigin="anonymous"
+    />
+    <link rel="stylesheet" href="../dist/epg-widget.css" />
+    <style>
+      body {
+        padding: 2rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1 class="mb-4">Web番組表（EPG）埋め込みモジュール</h1>
+      <p class="text-secondary">
+        GR/BS/CSのタブ切替、8日分スクロール、遅延レンダリングの挙動を確認できます。
+      </p>
+      <div id="epg-root"></div>
+    </div>
+
+    <script src="../dist/epg-widget.js"></script>
+    <script>
+      EPGWidget.mount("#epg-root", {
+        endpoints: {
+          servicesUrl: "../api-sample/services.json",
+          channelsUrl: "../api-sample/channels.json",
+          programsUrl: "../api-sample/programs.json"
+        },
+        pxPerMinute: 1.2,
+        nowLine: true
+      });
+    </script>
+  </body>
+</html>
