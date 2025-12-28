@@ -76,6 +76,30 @@
 .epg-grid-scroll {
   overflow: visible;
   background-color: var(--bs-body-bg);
+  position: relative;
+}
+
+.epg-day-loading {
+  position: absolute;
+  left: 72px;
+  right: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 1;
+  padding-top: 0.75rem;
+}
+
+.epg-day-loading-inner {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--bs-border-color);
+  background-color: var(--bs-body-bg);
+  font-size: 0.75rem;
 }
 
 .epg-grid {
