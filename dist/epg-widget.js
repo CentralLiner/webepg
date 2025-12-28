@@ -702,6 +702,42 @@
       servicesById[service.serviceId] = service;
     });
 
+    var pickMainService = function (serviceList) {
+      if (!serviceList || serviceList.length === 0) {
+        return null;
+      }
+      var primary = serviceList.find(function (service) {
+        return service.type === 1 && service.name;
+      });
+      if (primary) {
+        return primary;
+      }
+      return serviceList[0];
+    };
+
+    var sortColumns = function (items) {
+      return items.sort(function (a, b) {
+        var aKey =
+          a.mainService && a.mainService.remoteControlKeyId != null
+            ? a.mainService.remoteControlKeyId
+            : a.mainService
+            ? a.mainService.serviceId
+            : 0;
+        var bKey =
+          b.mainService && b.mainService.remoteControlKeyId != null
+            ? b.mainService.remoteControlKeyId
+            : b.mainService
+            ? b.mainService.serviceId
+            : 0;
+        if (aKey !== bKey) {
+          return aKey - bKey;
+        }
+        var aServiceId = a.mainService ? a.mainService.serviceId : 0;
+        var bServiceId = b.mainService ? b.mainService.serviceId : 0;
+        return aServiceId - bServiceId;
+      });
+    };
+
     if (this.state.currentTab === "CS") {
       var csColumns = [];
       channels
@@ -719,13 +755,14 @@
                 key: "CS-" + service.serviceId,
                 name: fullService.name || "(サービス名なし)",
                 services: [fullService],
+                mainService: fullService,
               });
             });
         });
-      return csColumns;
+      return sortColumns(csColumns);
     }
 
-    return channels
+    var grBsColumns = channels
       .filter(
         function (channel) {
           return channel.type === this.state.currentTab;
@@ -742,15 +779,18 @@
         if (filteredServices.length === 0) {
           return null;
         }
+        var mainService = pickMainService(filteredServices);
         return {
           key: channel.type + "-" + channel.channel,
-          name: channel.name || channel.channel,
+          name: (mainService && mainService.name) || channel.name || channel.channel,
           services: filteredServices,
+          mainService: mainService,
         };
       })
       .filter(function (col) {
         return col !== null;
       });
+    return sortColumns(grBsColumns);
   };
 
   EPGWidgetInstance.prototype.collectProgramsForColumns = function (columns, dayPrograms) {
@@ -871,12 +911,13 @@
         var header = createElement("div", "epg-channel-header bg-body border-bottom", "");
         var title = createElement("div", "epg-channel-title", column.name);
         var meta = createElement("div", "epg-channel-meta", "");
-        if (column.services[0] && column.services[0].remoteControlKeyId) {
-          meta.textContent = "リモコン" + column.services[0].remoteControlKeyId;
+        var primaryService = column.mainService || column.services[0];
+        if (primaryService && primaryService.remoteControlKeyId) {
+          meta.textContent = "リモコン" + primaryService.remoteControlKeyId;
         }
         var logo = null;
         if (typeof this.config.logoResolver === "function") {
-          var logoUrl = this.config.logoResolver(column.services[0]);
+          var logoUrl = this.config.logoResolver(primaryService || column.services[0]);
           if (logoUrl) {
             logo = createElement("img", "epg-channel-logo", "");
             logo.src = logoUrl;
