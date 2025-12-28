@@ -577,7 +577,10 @@
   };
 
   EPGWidgetInstance.prototype.observeSections = function (dayData) {
-    var markers = this.elements.body.querySelectorAll(".epg-day-marker[data-day-key]");
+    var markers = this.elements.body.querySelectorAll(".epg-day-loading[data-day-key]");
+    if (markers.length === 0) {
+      markers = this.elements.body.querySelectorAll(".epg-day-marker[data-day-key]");
+    }
     var renderSection = function (marker) {
       var dayKey = marker.getAttribute("data-day-key");
       this.renderDayPrograms(dayKey);
@@ -894,13 +897,7 @@
             });
             sharedCandidates.sort();
             var canonicalShared = sharedCandidates[0] || program.eventId;
-            sharedKey =
-              "shared-" +
-              canonicalShared +
-              "-" +
-              program.startAt +
-              "-" +
-              program.duration;
+            sharedKey = "shared-" + canonicalShared;
           }
         }
         var fallbackName = program.name || "";
@@ -915,16 +912,29 @@
             startAt: program.startAt,
             endAt: program.startAt + program.duration,
             programs: [],
+            minServiceId: program.serviceId != null ? program.serviceId : Number.POSITIVE_INFINITY,
           };
         }
         groups[groupKey].programs.push(program);
         groups[groupKey].startAt = Math.min(groups[groupKey].startAt, program.startAt);
         groups[groupKey].endAt = Math.max(groups[groupKey].endAt, program.startAt + program.duration);
+        if (program.serviceId != null) {
+          groups[groupKey].minServiceId = Math.min(groups[groupKey].minServiceId, program.serviceId);
+        }
       });
     });
 
     return Object.keys(groups).map(function (key) {
-      return groups[key];
+      var group = groups[key];
+      group.programs.sort(function (a, b) {
+        var aService = a.serviceId != null ? a.serviceId : Number.POSITIVE_INFINITY;
+        var bService = b.serviceId != null ? b.serviceId : Number.POSITIVE_INFINITY;
+        if (aService !== bService) {
+          return aService - bService;
+        }
+        return (a.eventId || 0) - (b.eventId || 0);
+      });
+      return group;
     });
   };
 
@@ -1035,6 +1045,7 @@
         var dayLoading = createElement("div", "epg-day-loading");
         dayLoading.style.top = dayOffset + "px";
         dayLoading.style.height = dayHeight + "px";
+        dayLoading.setAttribute("data-day-key", dayKey);
         dayLoading.innerHTML =
           '<div class="epg-day-loading-inner text-body-secondary">' +
           '<div class="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></div>' +
@@ -1049,7 +1060,15 @@
 
   EPGWidgetInstance.prototype.layoutPrograms = function (groups) {
     var sorted = groups.slice().sort(function (a, b) {
-      return a.startAt - b.startAt;
+      if (a.startAt !== b.startAt) {
+        return a.startAt - b.startAt;
+      }
+      var aService = a.minServiceId != null ? a.minServiceId : Number.POSITIVE_INFINITY;
+      var bService = b.minServiceId != null ? b.minServiceId : Number.POSITIVE_INFINITY;
+      if (aService !== bService) {
+        return aService - bService;
+      }
+      return (a.endAt || 0) - (b.endAt || 0);
     });
     var active = [];
     var lanes = [];
