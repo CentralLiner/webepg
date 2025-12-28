@@ -500,6 +500,7 @@
 
         var header = createElement("div", "epg-day-header bg-body border", "");
         header.textContent = dayData.labels[dayKey] || dayKey;
+        header.setAttribute("data-day-header", dayKey);
 
         var placeholder = createElement("div", "epg-day-placeholder", "読み込み中...");
 
@@ -522,6 +523,7 @@
     }
 
     this.observeSections(dayData);
+    this.observeActiveDay();
 
     if (this.state.scrollTop) {
       scrollContainer.scrollTop = this.state.scrollTop;
@@ -565,6 +567,40 @@
     }
   };
 
+  EPGWidgetInstance.prototype.observeActiveDay = function () {
+    var scrollContainer = this.elements.body.querySelector(".epg-scroll-container");
+    if (!scrollContainer || !("IntersectionObserver" in window)) {
+      return;
+    }
+
+    var buttonsByDay = {};
+    this.elements.dateLinks.querySelectorAll("button[data-epg-day]").forEach(function (button) {
+      buttonsByDay[button.getAttribute("data-epg-day")] = button;
+    });
+
+    var setActive = function (dayKey) {
+      Object.keys(buttonsByDay).forEach(function (key) {
+        buttonsByDay[key].classList.toggle("active", key === dayKey);
+      });
+    };
+
+    var headers = scrollContainer.querySelectorAll(".epg-day-header[data-day-header]");
+    var observer = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            setActive(entry.target.getAttribute("data-day-header"));
+          }
+        });
+      },
+      { root: scrollContainer, threshold: 0.6 }
+    );
+
+    headers.forEach(function (header) {
+      observer.observe(header);
+    });
+  };
+
   EPGWidgetInstance.prototype.prepareDayData = function () {
     var timeZone = this.config.timezone;
     var daySet = new Set(this.state.dayKeys);
@@ -593,6 +629,7 @@
 
   EPGWidgetInstance.prototype.renderDaySection = function (dayKey, dayData) {
     var header = createElement("div", "epg-day-header bg-body border", dayData.labels[dayKey] || dayKey);
+    header.setAttribute("data-day-header", dayKey);
     var body = createElement("div", "epg-day-body");
 
     var dayPrograms = dayData.byDay[dayKey] || [];
@@ -689,7 +726,6 @@
 
   EPGWidgetInstance.prototype.mergeProgramsForServices = function (serviceIds, programsByService) {
     var groups = {};
-    var sharedMap = {};
 
     serviceIds.forEach(function (serviceId) {
       var list = programsByService[serviceId] || [];
@@ -709,8 +745,12 @@
             sharedKey = combined.join("|");
           }
         }
-        var fallbackKey = program.startAt + "-" + program.duration + "-" + (program.name || "");
-        var groupKey = sharedKey || fallbackKey;
+        var fallbackName = program.name || "";
+        var fallbackKey = program.startAt + "-" + program.duration + "-" + fallbackName;
+        var eventKey = program.eventId
+          ? "event-" + program.eventId + "-" + program.startAt + "-" + program.duration
+          : null;
+        var groupKey = sharedKey || eventKey || fallbackKey;
         if (!groups[groupKey]) {
           groups[groupKey] = {
             key: groupKey,
@@ -722,9 +762,6 @@
         groups[groupKey].programs.push(program);
         groups[groupKey].startAt = Math.min(groups[groupKey].startAt, program.startAt);
         groups[groupKey].endAt = Math.max(groups[groupKey].endAt, program.startAt + program.duration);
-        if (sharedKey) {
-          sharedMap[groupKey] = true;
-        }
       });
     });
 
@@ -746,7 +783,7 @@
     timeInner.style.height = dayHeight + "px";
 
     for (var hour = 0; hour < 24; hour += 1) {
-      var label = createElement("div", "epg-time-label text-body", hour.toString().padStart(2, "0") + ":00");
+      var label = createElement("div", "epg-time-label text-body", hour.toString().padStart(2, "0"));
       label.style.top = hour * 60 * this.config.pxPerMinute + "px";
       timeInner.appendChild(label);
     }
