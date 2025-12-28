@@ -259,11 +259,11 @@
         return;
       }
       var dayKey = button.getAttribute("data-epg-day");
-      var section = this.elements.body.querySelector(
-        '.epg-day-section[data-day-key="' + dayKey + '"]'
+      var marker = this.elements.body.querySelector(
+        '.epg-day-marker[data-day-key="' + dayKey + '"]'
       );
-      if (section) {
-        section.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (marker) {
+        marker.scrollIntoView({ behavior: "smooth", block: "start" });
       }
     }.bind(this);
 
@@ -484,43 +484,42 @@
     this.state.renderedDays = new Set();
 
     var scrollContainer = createElement("div", "epg-scroll-container");
-    var sectionsWrapper = createElement("div", "epg-sections");
-    scrollContainer.appendChild(sectionsWrapper);
 
     this.elements.body.innerHTML = "";
     this.elements.body.appendChild(scrollContainer);
 
     var dayData = this.prepareDayData();
-    var emptyCount = 0;
+    var columns = this.buildColumns();
+    var columnProgramsByDay = {};
+    var totalPrograms = 0;
 
     this.state.dayKeys.forEach(
       function (dayKey) {
-        var daySection = createElement("section", "epg-day-section", "");
-        daySection.setAttribute("data-day-key", dayKey);
-
-        var header = createElement("div", "epg-day-header bg-body border", "");
-        header.textContent = dayData.labels[dayKey] || dayKey;
-        header.setAttribute("data-day-header", dayKey);
-
-        var placeholder = createElement("div", "epg-day-placeholder", "読み込み中...");
-
-        daySection.appendChild(header);
-        daySection.appendChild(placeholder);
-
-        sectionsWrapper.appendChild(daySection);
-
-        if (!dayData.byDay[dayKey] || dayData.byDay[dayKey].length === 0) {
-          emptyCount += 1;
-        }
+        var dayPrograms = dayData.byDay[dayKey] || [];
+        totalPrograms += dayPrograms.length;
+        columnProgramsByDay[dayKey] = this.collectProgramsForColumns(columns, dayPrograms);
       }.bind(this)
     );
 
-    if (emptyCount === this.state.dayKeys.length) {
+    if (totalPrograms === 0 || columns.length === 0) {
       var empty = createElement("div", "epg-empty text-center text-body", "番組情報がありません。");
       this.elements.body.innerHTML = "";
       this.elements.body.appendChild(empty);
       return;
     }
+
+    this.state.columns = columns;
+    this.state.columnProgramsByDay = columnProgramsByDay;
+
+    var gridScroll = this.renderCombinedGrid(columns, dayData);
+    if (!gridScroll) {
+      var emptyGrid = createElement("div", "epg-empty text-center text-body", "番組情報がありません。");
+      this.elements.body.innerHTML = "";
+      this.elements.body.appendChild(emptyGrid);
+      return;
+    }
+
+    scrollContainer.appendChild(gridScroll);
 
     this.observeSections(dayData);
     this.observeActiveDay();
@@ -531,17 +530,10 @@
   };
 
   EPGWidgetInstance.prototype.observeSections = function (dayData) {
-    var sections = this.elements.body.querySelectorAll(".epg-day-section");
-    var renderSection = function (section) {
-      var dayKey = section.getAttribute("data-day-key");
-      if (this.state.renderedDays.has(dayKey)) {
-        return;
-      }
-      this.state.renderedDays.add(dayKey);
-      var content = this.renderDaySection(dayKey, dayData);
-      section.innerHTML = "";
-      section.appendChild(content.header);
-      section.appendChild(content.body);
+    var markers = this.elements.body.querySelectorAll(".epg-day-marker[data-day-key]");
+    var renderSection = function (marker) {
+      var dayKey = marker.getAttribute("data-day-key");
+      this.renderDayPrograms(dayKey);
     }.bind(this);
 
     if ("IntersectionObserver" in window) {
@@ -557,13 +549,13 @@
         { root: this.elements.body.querySelector(".epg-scroll-container"), rootMargin: "200px" }
       );
 
-      sections.forEach(
-        function (section) {
-          this.observer.observe(section);
+      markers.forEach(
+        function (marker) {
+          this.observer.observe(marker);
         }.bind(this)
       );
     } else {
-      sections.forEach(renderSection);
+      markers.forEach(renderSection);
     }
   };
 
@@ -584,7 +576,7 @@
       });
     };
 
-    var headers = scrollContainer.querySelectorAll(".epg-day-header[data-day-header]");
+    var headers = scrollContainer.querySelectorAll(".epg-day-marker[data-day-header]");
     var observer = new IntersectionObserver(
       function (entries) {
         entries.forEach(function (entry) {
@@ -627,23 +619,77 @@
     return { byDay: byDay, labels: labels };
   };
 
-  EPGWidgetInstance.prototype.renderDaySection = function (dayKey, dayData) {
-    var header = createElement("div", "epg-day-header bg-body border", dayData.labels[dayKey] || dayKey);
-    header.setAttribute("data-day-header", dayKey);
-    var body = createElement("div", "epg-day-body");
-
-    var dayPrograms = dayData.byDay[dayKey] || [];
-    var columns = this.buildColumns();
-    var columnPrograms = this.collectProgramsForColumns(columns, dayPrograms);
-    var grid = this.renderGrid(columns, columnPrograms, dayKey);
-
-    if (grid) {
-      body.appendChild(grid);
-    } else {
-      body.appendChild(createElement("div", "epg-empty text-center text-body", "番組情報がありません。"));
+  EPGWidgetInstance.prototype.renderDayPrograms = function (dayKey) {
+    if (this.state.renderedDays.has(dayKey)) {
+      return;
     }
+    var dayIndex = this.state.dayKeys.indexOf(dayKey);
+    if (dayIndex === -1) {
+      return;
+    }
+    var dayHeight = 24 * 60 * this.config.pxPerMinute;
+    var dayOffset = this.state.dayOffsets[dayKey] || dayIndex * dayHeight;
+    var columnPrograms = this.state.columnProgramsByDay[dayKey] || [];
 
-    return { header: header, body: body };
+    columnPrograms.forEach(
+      function (groups, columnIndex) {
+        var programsContainer = this.state.programContainers[columnIndex];
+        if (!programsContainer) {
+          return;
+        }
+        var laidOut = this.layoutPrograms(groups || []);
+
+        laidOut.forEach(
+          function (group) {
+            var program = group.programs[0] || {};
+            var startDate = new Date(group.startAt);
+            var endDate = new Date(group.endAt);
+            var startMinutes = getMinutesSinceMidnight(startDate, this.config.timezone);
+            var durationMinutes = Math.max(1, Math.round((group.endAt - group.startAt) / 60000));
+            var top = dayOffset + startMinutes * this.config.pxPerMinute;
+            var height = durationMinutes * this.config.pxPerMinute;
+            var programEl = createElement("div", "epg-program border", "");
+            var programId = group.key + "-" + group.startAt + "-" + dayKey + "-" + columnIndex;
+            programEl.setAttribute("data-program-id", programId);
+            programEl.setAttribute("tabindex", "0");
+            programEl.style.top = top + "px";
+            programEl.style.height = height + "px";
+            programEl.style.left = (group.laneIndex / group.laneCount) * 100 + "%";
+            programEl.style.width = 100 / group.laneCount + "%";
+
+            var titleText = program.name || "（番組情報なし）";
+            var timeText =
+              formatTime(startDate, this.config.timezone) + "〜" + formatTime(endDate, this.config.timezone);
+
+            programEl.innerHTML =
+              '<div class="epg-program-inner">' +
+              '<div class="epg-program-title">' +
+              titleText +
+              "</div>" +
+              '<div class="epg-program-time">' +
+              timeText +
+              "</div>" +
+              "</div>";
+
+            this.programIndex.set(programId, {
+              raw: program,
+              group: group,
+              title: titleText,
+              time: timeText,
+              services: group.programs
+                .map(function (item) {
+                  return item.serviceId;
+                })
+                .join(", "),
+            });
+
+            programsContainer.appendChild(programEl);
+          }.bind(this)
+        );
+      }.bind(this)
+    );
+
+    this.state.renderedDays.add(dayKey);
   };
 
   EPGWidgetInstance.prototype.buildColumns = function () {
@@ -781,7 +827,7 @@
     });
   };
 
-  EPGWidgetInstance.prototype.renderGrid = function (columns, columnPrograms, dayKey) {
+  EPGWidgetInstance.prototype.renderCombinedGrid = function (columns, dayData) {
     if (columns.length === 0) {
       return null;
     }
@@ -791,17 +837,33 @@
     var timeColumn = createElement("div", "epg-time-column border-end");
     var timeInner = createElement("div", "epg-time-inner");
     var dayHeight = 24 * 60 * this.config.pxPerMinute;
-    timeInner.style.height = dayHeight + "px";
+    var totalHeight = this.state.dayKeys.length * dayHeight;
+    timeInner.style.height = totalHeight + "px";
 
-    for (var hour = 0; hour < 24; hour += 1) {
-      var label = createElement("div", "epg-time-label text-body", hour.toString().padStart(2, "0"));
-      label.style.top = hour * 60 * this.config.pxPerMinute + "px";
-      timeInner.appendChild(label);
-    }
+    this.state.dayOffsets = {};
+
+    this.state.dayKeys.forEach(
+      function (dayKey, index) {
+        var dayOffset = index * dayHeight;
+        this.state.dayOffsets[dayKey] = dayOffset;
+        var marker = createElement("div", "epg-day-marker bg-body border-bottom", dayData.labels[dayKey] || dayKey);
+        marker.style.top = dayOffset + "px";
+        marker.setAttribute("data-day-key", dayKey);
+        marker.setAttribute("data-day-header", dayKey);
+        timeInner.appendChild(marker);
+
+        for (var hour = 0; hour < 24; hour += 1) {
+          var label = createElement("div", "epg-time-label text-body", hour.toString().padStart(2, "0"));
+          label.style.top = dayOffset + hour * 60 * this.config.pxPerMinute + "px";
+          timeInner.appendChild(label);
+        }
+      }.bind(this)
+    );
 
     timeColumn.appendChild(timeInner);
 
     var columnsWrapper = createElement("div", "epg-columns");
+    this.state.programContainers = [];
 
     columns.forEach(
       function (column, index) {
@@ -831,64 +893,25 @@
         }
 
         var programsContainer = createElement("div", "epg-programs");
-        programsContainer.style.height = dayHeight + "px";
+        programsContainer.style.height = totalHeight + "px";
 
-        var groups = this.layoutPrograms(columnPrograms[index] || []);
-
-        groups.forEach(
-          function (group) {
-            var program = group.programs[0] || {};
-            var startDate = new Date(group.startAt);
-            var endDate = new Date(group.endAt);
-            var startMinutes = getMinutesSinceMidnight(startDate, this.config.timezone);
-            var durationMinutes = Math.max(1, Math.round((group.endAt - group.startAt) / 60000));
-            var top = startMinutes * this.config.pxPerMinute;
-            var height = durationMinutes * this.config.pxPerMinute;
-            var programEl = createElement("div", "epg-program border", "");
-            var programId = group.key + "-" + group.startAt;
-            programEl.setAttribute("data-program-id", programId);
-            programEl.setAttribute("tabindex", "0");
-            programEl.style.top = top + "px";
-            programEl.style.height = height + "px";
-            programEl.style.left = (group.laneIndex / group.laneCount) * 100 + "%";
-            programEl.style.width = 100 / group.laneCount + "%";
-
-            var titleText = program.name || "（番組情報なし）";
-            var timeText =
-              formatTime(startDate, this.config.timezone) + "〜" + formatTime(endDate, this.config.timezone);
-
-            programEl.innerHTML =
-              '<div class="epg-program-inner">' +
-              '<div class="epg-program-title">' +
-              titleText +
-              "</div>" +
-              '<div class="epg-program-time">' +
-              timeText +
-              "</div>" +
-              "</div>";
-
-            this.programIndex.set(programId, {
-              raw: program,
-              group: group,
-              title: titleText,
-              time: timeText,
-              services: group.programs
-                .map(function (item) {
-                  return item.serviceId;
-                })
-                .join(", "),
-            });
-
-            programsContainer.appendChild(programEl);
+        this.state.dayKeys.forEach(
+          function (dayKey, dayIndex) {
+            var divider = createElement("div", "epg-day-divider", "");
+            divider.style.top = dayIndex * dayHeight + "px";
+            programsContainer.appendChild(divider);
           }.bind(this)
         );
 
         if (this.config.nowLine) {
           var now = new Date();
           var nowKey = getDayKey(now, this.config.timezone);
-          if (nowKey === dayKey) {
+          if (this.state.dayOffsets[nowKey] !== undefined) {
             var nowLine = createElement("div", "epg-now-line", "");
-            nowLine.style.top = getMinutesSinceMidnight(now, this.config.timezone) * this.config.pxPerMinute + "px";
+            nowLine.style.top =
+              this.state.dayOffsets[nowKey] +
+              getMinutesSinceMidnight(now, this.config.timezone) * this.config.pxPerMinute +
+              "px";
             programsContainer.appendChild(nowLine);
           }
         }
@@ -896,6 +919,7 @@
         columnEl.appendChild(header);
         columnEl.appendChild(programsContainer);
         columnsWrapper.appendChild(columnEl);
+        this.state.programContainers.push(programsContainer);
       }.bind(this)
     );
 
