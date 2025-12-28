@@ -163,6 +163,42 @@
     return networkId + ":" + serviceId;
   }
 
+  function pickDisplayProgram(programs) {
+    if (!Array.isArray(programs) || programs.length === 0) {
+      return null;
+    }
+    var best = null;
+    var bestScore = -1;
+    programs.forEach(function (program, index) {
+      var score = 0;
+      var name = (program.name || "").trim();
+      if (name) {
+        score += 4;
+      }
+      if (program.description) {
+        score += 2;
+      }
+      if (program.extended && Object.keys(program.extended).length > 0) {
+        score += 1;
+      }
+      if (program.eventId != null) {
+        score += 1;
+      }
+      if (score > bestScore) {
+        best = program;
+        bestScore = score;
+      } else if (score === bestScore && best) {
+        var bestName = (best.name || "").trim();
+        if (name.length > bestName.length || (name && !bestName)) {
+          best = program;
+        }
+      } else if (score === bestScore && !best) {
+        best = program;
+      }
+    });
+    return best || programs[0];
+  }
+
   function EPGWidgetInstance(target, config) {
     this.target = target;
     this.config = mergeConfig(defaults, config || {});
@@ -172,6 +208,7 @@
       data: null,
       dayKeys: [],
       renderedDays: new Set(),
+      dayLoadingIndicators: {},
     };
     this.elements = {};
     this.programIndex = new Map();
@@ -491,6 +528,7 @@
 
     this.programIndex.clear();
     this.state.renderedDays = new Set();
+    this.state.dayLoadingIndicators = {};
 
     var scrollContainer = createElement("div", "epg-scroll-container");
 
@@ -650,7 +688,7 @@
 
         laidOut.forEach(
           function (group) {
-            var program = group.programs[0] || {};
+            var program = pickDisplayProgram(group.programs) || {};
             var startDate = new Date(group.startAt);
             var endDate = new Date(group.endAt);
             var startMinutes = getMinutesSinceMidnight(startDate, this.config.timezone);
@@ -699,6 +737,12 @@
     );
 
     this.state.renderedDays.add(dayKey);
+
+    var loadingIndicator = this.state.dayLoadingIndicators[dayKey];
+    if (loadingIndicator && loadingIndicator.parentNode) {
+      loadingIndicator.parentNode.removeChild(loadingIndicator);
+    }
+    delete this.state.dayLoadingIndicators[dayKey];
   };
 
   EPGWidgetInstance.prototype.buildColumns = function () {
@@ -984,6 +1028,22 @@
     grid.appendChild(timeColumn);
     grid.appendChild(columnsWrapper);
     gridScroll.appendChild(grid);
+
+    this.state.dayKeys.forEach(
+      function (dayKey) {
+        var dayOffset = this.state.dayOffsets[dayKey] || 0;
+        var dayLoading = createElement("div", "epg-day-loading");
+        dayLoading.style.top = dayOffset + "px";
+        dayLoading.style.height = dayHeight + "px";
+        dayLoading.innerHTML =
+          '<div class="epg-day-loading-inner text-body-secondary">' +
+          '<div class="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></div>' +
+          '<span>番組情報を読み込み中...</span>' +
+          "</div>";
+        this.state.dayLoadingIndicators[dayKey] = dayLoading;
+        gridScroll.appendChild(dayLoading);
+      }.bind(this)
+    );
     return gridScroll;
   };
 
