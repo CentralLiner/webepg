@@ -172,6 +172,7 @@
 .epg-program {
   position: absolute;
   padding: 0.25rem;
+  box-sizing: border-box;
   border-radius: 0.4rem;
   background-color: rgba(13, 110, 253, 0.15);
   color: var(--bs-body-color);
