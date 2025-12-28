@@ -53,46 +53,33 @@
   overflow: auto;
 }
 
-.epg-sections {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  padding: 0;
-}
-
-.epg-day-section {
-  border: 0;
-  border-radius: 0;
-  background-color: var(--bs-body-bg);
-  overflow: hidden;
-}
-
-.epg-day-header {
-  padding: 0.5rem 1rem;
-  font-weight: 600;
-  position: sticky;
-  top: 0;
-  z-index: 5;
-}
-
-.epg-day-body {
-  border-bottom: 1px solid var(--bs-border-color);
-}
-
-.epg-day-placeholder {
-  padding: 2rem;
-  text-align: center;
-  color: var(--bs-secondary-color);
-}
-
 .epg-grid-scroll {
   overflow-x: auto;
   background-color: var(--bs-body-bg);
+  position: relative;
 }
 
 .epg-grid {
   display: flex;
   min-width: 100%;
+}
+
+.epg-day-markers {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.epg-day-marker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  background-color: var(--bs-body-bg);
 }
 
 .epg-time-column {

@@ -259,11 +259,16 @@
         return;
       }
       var dayKey = button.getAttribute("data-epg-day");
-      var section = this.elements.body.querySelector(
-        '.epg-day-section[data-day-key="' + dayKey + '"]'
-      );
-      if (section) {
-        section.scrollIntoView({ behavior: "smooth", block: "start" });
+      var scrollContainer = this.elements.body.querySelector(".epg-scroll-container");
+      var marker = scrollContainer
+        ? scrollContainer.querySelector('.epg-day-marker[data-day-key="' + dayKey + '"]')
+        : null;
+      if (scrollContainer && marker) {
+        var offset = parseFloat(marker.getAttribute("data-day-offset"));
+        if (Number.isNaN(offset)) {
+          offset = marker.offsetTop;
+        }
+        scrollContainer.scrollTo({ top: offset, behavior: "smooth" });
       }
     }.bind(this);
 
@@ -484,45 +489,117 @@
     this.state.renderedDays = new Set();
 
     var scrollContainer = createElement("div", "epg-scroll-container");
-    var sectionsWrapper = createElement("div", "epg-sections");
-    scrollContainer.appendChild(sectionsWrapper);
+    var gridScroll = createElement("div", "epg-grid-scroll");
+    var grid = createElement("div", "epg-grid");
+    gridScroll.appendChild(grid);
+    scrollContainer.appendChild(gridScroll);
 
     this.elements.body.innerHTML = "";
     this.elements.body.appendChild(scrollContainer);
 
     var dayData = this.prepareDayData();
-    var emptyCount = 0;
+    var totalPrograms = 0;
+    this.state.dayKeys.forEach(function (dayKey) {
+      totalPrograms += (dayData.byDay[dayKey] || []).length;
+    });
 
-    this.state.dayKeys.forEach(
-      function (dayKey) {
-        var daySection = createElement("section", "epg-day-section", "");
-        daySection.setAttribute("data-day-key", dayKey);
-
-        var header = createElement("div", "epg-day-header bg-body border", "");
-        header.textContent = dayData.labels[dayKey] || dayKey;
-        header.setAttribute("data-day-header", dayKey);
-
-        var placeholder = createElement("div", "epg-day-placeholder", "読み込み中...");
-
-        daySection.appendChild(header);
-        daySection.appendChild(placeholder);
-
-        sectionsWrapper.appendChild(daySection);
-
-        if (!dayData.byDay[dayKey] || dayData.byDay[dayKey].length === 0) {
-          emptyCount += 1;
-        }
-      }.bind(this)
-    );
-
-    if (emptyCount === this.state.dayKeys.length) {
+    if (totalPrograms === 0) {
       var empty = createElement("div", "epg-empty text-center text-body", "番組情報がありません。");
       this.elements.body.innerHTML = "";
       this.elements.body.appendChild(empty);
       return;
     }
 
-    this.observeSections(dayData);
+    var columns = this.buildColumns();
+    if (columns.length === 0) {
+      var emptyColumns = createElement("div", "epg-empty text-center text-body", "番組情報がありません。");
+      this.elements.body.innerHTML = "";
+      this.elements.body.appendChild(emptyColumns);
+      return;
+    }
+
+    var dayHeight = 24 * 60 * this.config.pxPerMinute;
+    var totalHeight = dayHeight * this.state.dayKeys.length;
+
+    var timeColumn = createElement("div", "epg-time-column border-end");
+    var timeInner = createElement("div", "epg-time-inner");
+    timeInner.style.height = totalHeight + "px";
+
+    this.state.dayKeys.forEach(
+      function (_dayKey, dayIndex) {
+        var dayOffset = dayIndex * dayHeight;
+        for (var hour = 0; hour < 24; hour += 1) {
+          var label = createElement(
+            "div",
+            "epg-time-label text-body",
+            hour.toString().padStart(2, "0")
+          );
+          label.style.top = dayOffset + hour * 60 * this.config.pxPerMinute + "px";
+          timeInner.appendChild(label);
+        }
+      }.bind(this)
+    );
+
+    timeColumn.appendChild(timeInner);
+
+    var columnsWrapper = createElement("div", "epg-columns");
+    var columnContainers = [];
+
+    columns.forEach(
+      function (column) {
+        var columnEl = createElement("div", "epg-channel-column border-end");
+        var header = createElement("div", "epg-channel-header bg-body border-bottom", "");
+        var title = createElement("div", "epg-channel-title", column.name);
+        var meta = createElement("div", "epg-channel-meta", "");
+        if (column.services[0] && column.services[0].remoteControlKeyId) {
+          meta.textContent = "リモコン" + column.services[0].remoteControlKeyId;
+        }
+        var logo = null;
+        if (typeof this.config.logoResolver === "function") {
+          var logoUrl = this.config.logoResolver(column.services[0]);
+          if (logoUrl) {
+            logo = createElement("img", "epg-channel-logo", "");
+            logo.src = logoUrl;
+            logo.alt = column.name;
+          }
+        }
+
+        if (logo) {
+          header.appendChild(logo);
+        }
+        header.appendChild(title);
+        if (meta.textContent) {
+          header.appendChild(meta);
+        }
+
+        var programsContainer = createElement("div", "epg-programs");
+        programsContainer.style.height = totalHeight + "px";
+
+        columnEl.appendChild(header);
+        columnEl.appendChild(programsContainer);
+        columnsWrapper.appendChild(columnEl);
+        columnContainers.push(programsContainer);
+      }.bind(this)
+    );
+
+    grid.appendChild(timeColumn);
+    grid.appendChild(columnsWrapper);
+
+    var dayMarkers = createElement("div", "epg-day-markers");
+    this.state.dayKeys.forEach(
+      function (dayKey, index) {
+        var marker = createElement("div", "epg-day-marker bg-body border-bottom", "");
+        marker.textContent = dayData.labels[dayKey] || dayKey;
+        marker.setAttribute("data-day-key", dayKey);
+        marker.setAttribute("data-day-offset", index * dayHeight);
+        marker.style.top = index * dayHeight + "px";
+        dayMarkers.appendChild(marker);
+      }.bind(this)
+    );
+
+    gridScroll.appendChild(dayMarkers);
+
+    this.observeDays(dayData, columns, columnContainers, dayHeight);
     this.observeActiveDay();
 
     if (this.state.scrollTop) {
@@ -530,18 +607,16 @@
     }
   };
 
-  EPGWidgetInstance.prototype.observeSections = function (dayData) {
-    var sections = this.elements.body.querySelectorAll(".epg-day-section");
-    var renderSection = function (section) {
-      var dayKey = section.getAttribute("data-day-key");
-      if (this.state.renderedDays.has(dayKey)) {
+  EPGWidgetInstance.prototype.observeDays = function (dayData, columns, columnContainers, dayHeight) {
+    var markers = this.elements.body.querySelectorAll(".epg-day-marker[data-day-key]");
+    var renderDay = function (marker) {
+      var dayKey = marker.getAttribute("data-day-key");
+      var dayIndex = this.state.dayKeys.indexOf(dayKey);
+      if (dayIndex === -1 || this.state.renderedDays.has(dayKey)) {
         return;
       }
       this.state.renderedDays.add(dayKey);
-      var content = this.renderDaySection(dayKey, dayData);
-      section.innerHTML = "";
-      section.appendChild(content.header);
-      section.appendChild(content.body);
+      this.renderDayPrograms(dayKey, dayIndex, dayData, columns, columnContainers, dayHeight);
     }.bind(this);
 
     if ("IntersectionObserver" in window) {
@@ -549,7 +624,7 @@
         function (entries) {
           entries.forEach(function (entry) {
             if (entry.isIntersecting) {
-              renderSection(entry.target);
+              renderDay(entry.target);
               this.observer.unobserve(entry.target);
             }
           }, this);
@@ -557,13 +632,13 @@
         { root: this.elements.body.querySelector(".epg-scroll-container"), rootMargin: "200px" }
       );
 
-      sections.forEach(
-        function (section) {
-          this.observer.observe(section);
+      markers.forEach(
+        function (marker) {
+          this.observer.observe(marker);
         }.bind(this)
       );
     } else {
-      sections.forEach(renderSection);
+      markers.forEach(renderDay);
     }
   };
 
@@ -584,12 +659,12 @@
       });
     };
 
-    var headers = scrollContainer.querySelectorAll(".epg-day-header[data-day-header]");
+    var headers = scrollContainer.querySelectorAll(".epg-day-marker[data-day-key]");
     var observer = new IntersectionObserver(
       function (entries) {
         entries.forEach(function (entry) {
           if (entry.isIntersecting) {
-            setActive(entry.target.getAttribute("data-day-header"));
+            setActive(entry.target.getAttribute("data-day-key"));
           }
         });
       },
@@ -627,23 +702,86 @@
     return { byDay: byDay, labels: labels };
   };
 
-  EPGWidgetInstance.prototype.renderDaySection = function (dayKey, dayData) {
-    var header = createElement("div", "epg-day-header bg-body border", dayData.labels[dayKey] || dayKey);
-    header.setAttribute("data-day-header", dayKey);
-    var body = createElement("div", "epg-day-body");
-
+  EPGWidgetInstance.prototype.renderDayPrograms = function (
+    dayKey,
+    dayIndex,
+    dayData,
+    columns,
+    columnContainers,
+    dayHeight
+  ) {
     var dayPrograms = dayData.byDay[dayKey] || [];
-    var columns = this.buildColumns();
     var columnPrograms = this.collectProgramsForColumns(columns, dayPrograms);
-    var grid = this.renderGrid(columns, columnPrograms, dayKey);
+    var dayOffset = dayIndex * dayHeight;
 
-    if (grid) {
-      body.appendChild(grid);
-    } else {
-      body.appendChild(createElement("div", "epg-empty text-center text-body", "番組情報がありません。"));
+    columnPrograms.forEach(
+      function (programGroups, columnIndex) {
+        var programsContainer = columnContainers[columnIndex];
+        var groups = this.layoutPrograms(programGroups || []);
+
+        groups.forEach(
+          function (group) {
+            var program = group.programs[0] || {};
+            var startDate = new Date(group.startAt);
+            var endDate = new Date(group.endAt);
+            var startMinutes = getMinutesSinceMidnight(startDate, this.config.timezone);
+            var durationMinutes = Math.max(1, Math.round((group.endAt - group.startAt) / 60000));
+            var top = dayOffset + startMinutes * this.config.pxPerMinute;
+            var height = durationMinutes * this.config.pxPerMinute;
+            var programEl = createElement("div", "epg-program border", "");
+            var programId = group.key + "-" + group.startAt;
+            programEl.setAttribute("data-program-id", programId);
+            programEl.setAttribute("tabindex", "0");
+            programEl.style.top = top + "px";
+            programEl.style.height = height + "px";
+            programEl.style.left = (group.laneIndex / group.laneCount) * 100 + "%";
+            programEl.style.width = 100 / group.laneCount + "%";
+
+            var titleText = program.name || "（番組情報なし）";
+            var timeText =
+              formatTime(startDate, this.config.timezone) + "〜" + formatTime(endDate, this.config.timezone);
+
+            programEl.innerHTML =
+              '<div class="epg-program-inner">' +
+              '<div class="epg-program-title">' +
+              titleText +
+              "</div>" +
+              '<div class="epg-program-time">' +
+              timeText +
+              "</div>" +
+              "</div>";
+
+            this.programIndex.set(programId, {
+              raw: program,
+              group: group,
+              title: titleText,
+              time: timeText,
+              services: group.programs
+                .map(function (item) {
+                  return item.serviceId;
+                })
+                .join(", "),
+            });
+
+            programsContainer.appendChild(programEl);
+          }.bind(this)
+        );
+      }.bind(this)
+    );
+
+    if (this.config.nowLine) {
+      var now = new Date();
+      var nowKey = getDayKey(now, this.config.timezone);
+      if (nowKey === dayKey) {
+        columnContainers.forEach(
+          function (container) {
+            var nowLine = createElement("div", "epg-now-line", "");
+            nowLine.style.top = dayOffset + getMinutesSinceMidnight(now, this.config.timezone) * this.config.pxPerMinute + "px";
+            container.appendChild(nowLine);
+          }.bind(this)
+        );
+      }
     }
-
-    return { header: header, body: body };
   };
 
   EPGWidgetInstance.prototype.buildColumns = function () {
