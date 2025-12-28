@@ -1,6 +1,9 @@
 .epg-widget {
   font-family: "Helvetica Neue", Arial, "Noto Sans JP", sans-serif;
   color: var(--bs-body-color);
+  --epg-time-column-width: 56px;
+  --epg-channel-width: 176px;
+  --epg-channel-min-width: 160px;
 }
 
 .epg-container {
@@ -55,7 +58,7 @@
 
 .epg-day-marker {
   position: absolute;
-  left: 0;
+  left: var(--epg-time-column-width);
   right: 0;
   padding: 0.35rem 0.5rem;
   font-weight: 600;
@@ -81,7 +84,7 @@
 
 .epg-day-loading {
   position: absolute;
-  left: 72px;
+  left: var(--epg-time-column-width);
   right: 0;
   display: flex;
   align-items: flex-start;
@@ -105,10 +108,12 @@
 .epg-grid {
   display: flex;
   min-width: 100%;
+  align-items: flex-start;
 }
 
 .epg-time-column {
-  flex: 0 0 72px;
+  flex: 0 0 var(--epg-time-column-width);
+  width: var(--epg-time-column-width);
   position: sticky;
   left: 0;
   background: var(--bs-body-bg);
@@ -128,7 +133,7 @@
 
 .epg-time-label {
   position: absolute;
-  left: 0.5rem;
+  left: 0.25rem;
   font-size: 0.75rem;
   color: var(--bs-secondary-color);
 }
@@ -148,8 +153,8 @@
 }
 
 .epg-channel-column {
-  width: 220px;
-  min-width: 200px;
+  width: var(--epg-channel-width);
+  min-width: var(--epg-channel-min-width);
   display: flex;
   flex-direction: column;
   background-color: var(--bs-body-bg);
@@ -187,7 +192,7 @@
 
 .epg-program {
   position: absolute;
-  padding: 0.25rem;
+  padding: 0.3rem 0.35rem;
   box-sizing: border-box;
   border-radius: 0.4rem;
   background-color: rgba(13, 110, 253, 0.15);
@@ -198,6 +203,15 @@
 
 [data-bs-theme="dark"] .epg-program {
   background-color: rgba(13, 110, 253, 0.25);
+}
+
+.epg-program.epg-program-ended {
+  background-color: var(--bs-secondary-bg);
+  color: var(--bs-secondary-color);
+}
+
+[data-bs-theme="dark"] .epg-program.epg-program-ended {
+  background-color: rgba(108, 117, 125, 0.4);
 }
 
 .epg-program:focus,
@@ -212,6 +226,20 @@
   gap: 0.25rem;
 }
 
+.epg-program-top {
+  display: flex;
+  gap: 0.35rem;
+  align-items: flex-start;
+}
+
+.epg-program-minute {
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: inherit;
+  flex: 0 0 auto;
+}
+
 .epg-program-title {
   font-size: 0.8rem;
   font-weight: 600;
@@ -219,6 +247,16 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+.epg-program-summary {
+  font-size: 0.72rem;
+  color: var(--bs-secondary-color);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.3;
 }
 
 .epg-program-time {
@@ -257,24 +295,4 @@
 
 .epg-modal.show {
   display: flex;
-}
-
-.epg-modal-open {
-  overflow: hidden;
-}
-
-@media (max-width: 768px) {
-  .epg-header {
-    gap: 0.5rem;
-  }
-
-  .epg-date-links {
-    overflow-x: auto;
-    flex-wrap: nowrap;
-  }
-
-  .epg-channel-column {
-    width: 180px;
-    min-width: 160px;
-  }
 }

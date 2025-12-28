@@ -19,7 +19,7 @@
     initialTab: "GR",
     includeServiceTypes: [1],
     timezone: "Asia/Tokyo",
-    pxPerMinute: 2,
+    pxPerMinute: 2.4,
     nowLine: true,
     onProgramClick: null,
     logoResolver: null,
@@ -78,6 +78,45 @@
       hour: "2-digit",
       minute: "2-digit",
     }).format(date);
+  }
+
+  function formatMinute(date, timeZone) {
+    var formatter = new Intl.DateTimeFormat("ja-JP", {
+      timeZone: timeZone,
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    var parts = formatter.formatToParts(date);
+    var minute = parts.find(function (p) {
+      return p.type === "minute";
+    });
+    return minute ? minute.value : "00";
+  }
+
+  function normalizeSummary(text) {
+    return String(text || "").replace(/\s+/g, " ").trim();
+  }
+
+  function getProgramSummary(program) {
+    if (!program) {
+      return "";
+    }
+    if (program.description) {
+      return program.description;
+    }
+    if (program.extended) {
+      if (typeof program.extended === "string") {
+        return program.extended;
+      }
+      if (typeof program.extended === "object") {
+        var keys = Object.keys(program.extended);
+        if (keys.length) {
+          return program.extended[keys[0]];
+        }
+      }
+    }
+    return "";
   }
 
   function getDayKey(date, timeZone) {
@@ -724,6 +763,7 @@
     var dayHeight = 24 * 60 * this.config.pxPerMinute;
     var dayOffset = this.state.dayOffsets[dayKey] || dayIndex * dayHeight;
     var columnPrograms = this.state.columnProgramsByDay[dayKey] || [];
+    var now = Date.now();
 
     columnPrograms.forEach(
       function (groups, columnIndex) {
@@ -751,17 +791,31 @@
             programEl.style.left = (group.laneIndex / group.laneCount) * 100 + "%";
             programEl.style.width = 100 / group.laneCount + "%";
 
+            if (group.endAt <= now) {
+              programEl.classList.add("epg-program-ended");
+            }
+
             var titleText = program.name || "（番組情報なし）";
             var timeText =
               formatTime(startDate, this.config.timezone) + "〜" + formatTime(endDate, this.config.timezone);
+            var minuteText = formatMinute(startDate, this.config.timezone);
+            var summaryText = normalizeSummary(getProgramSummary(program));
+            if (!summaryText) {
+              summaryText = "番組情報なし";
+            }
 
             programEl.innerHTML =
               '<div class="epg-program-inner">' +
-              '<div class="epg-program-title">' +
+              '<div class="epg-program-top">' +
+              '<span class="epg-program-minute">' +
+              minuteText +
+              "</span>" +
+              '<span class="epg-program-title">' +
               titleText +
+              "</span>" +
               "</div>" +
-              '<div class="epg-program-time">' +
-              timeText +
+              '<div class="epg-program-summary">' +
+              summaryText +
               "</div>" +
               "</div>";
 
@@ -1009,7 +1063,7 @@
         marker.style.top = dayOffset + "px";
         marker.setAttribute("data-day-key", dayKey);
         marker.setAttribute("data-day-header", dayKey);
-        timeInner.appendChild(marker);
+        gridScroll.appendChild(marker);
 
         for (var hour = 0; hour < 24; hour += 1) {
           var label = createElement("div", "epg-time-label text-body", hour.toString().padStart(2, "0"));
