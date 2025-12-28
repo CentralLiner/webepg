@@ -736,13 +736,24 @@
             return item.type === "shared";
           });
           if (sharedItems.length) {
-            var combined = sharedItems
-              .map(function (item) {
-                return item.serviceId + ":" + item.eventId;
-              })
-              .concat(program.serviceId + ":" + program.eventId);
-            combined.sort();
-            sharedKey = combined.join("|");
+            if (program.eventId !== undefined && program.eventId !== null) {
+              sharedKey =
+                "shared-" +
+                program.eventId +
+                "-" +
+                program.startAt +
+                "-" +
+                program.duration;
+            } else {
+              var combined = sharedItems
+                .map(function (item) {
+                  return item.serviceId + ":" + item.eventId;
+                })
+                .concat(program.serviceId + ":" + program.eventId);
+              combined = Array.from(new Set(combined));
+              combined.sort();
+              sharedKey = combined.join("|");
+            }
           }
         }
         var fallbackName = program.name || "";
