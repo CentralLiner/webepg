@@ -383,6 +383,10 @@
     if (this.observer) {
       this.observer.disconnect();
     }
+    if (this.activeDayCleanup) {
+      this.activeDayCleanup();
+      this.activeDayCleanup = null;
+    }
     this.detachEvents();
     this.target.innerHTML = "";
     this.target.classList.remove("epg-widget");
@@ -568,6 +572,7 @@
 
     scrollContainer.appendChild(gridScroll);
 
+    this.syncHeaderHeights();
     this.observeSections(dayData);
     this.observeActiveDay();
 
@@ -611,7 +616,7 @@
 
   EPGWidgetInstance.prototype.observeActiveDay = function () {
     var scrollContainer = this.elements.body.querySelector(".epg-scroll-container");
-    if (!scrollContainer || !("IntersectionObserver" in window)) {
+    if (!scrollContainer) {
       return;
     }
 
@@ -626,21 +631,60 @@
       });
     };
 
-    var headers = scrollContainer.querySelectorAll(".epg-day-marker[data-day-header]");
-    var observer = new IntersectionObserver(
-      function (entries) {
-        entries.forEach(function (entry) {
-          if (entry.isIntersecting) {
-            setActive(entry.target.getAttribute("data-day-header"));
-          }
-        });
-      },
-      { root: scrollContainer, threshold: 0.6 }
-    );
+    var dayHeight = 24 * 60 * this.config.pxPerMinute;
+    var updateActiveFromScroll = function () {
+      var headerOffset = this.state.headerHeight || 0;
+      var adjusted = Math.max(0, scrollContainer.scrollTop - headerOffset);
+      var dayIndex = Math.min(this.state.dayKeys.length - 1, Math.floor(adjusted / dayHeight));
+      var dayKey = this.state.dayKeys[dayIndex];
+      if (dayKey) {
+        setActive(dayKey);
+      }
+    }.bind(this);
 
+    var rafId = null;
+    var onScroll = function () {
+      if (rafId) {
+        return;
+      }
+      rafId = requestAnimationFrame(function () {
+        rafId = null;
+        updateActiveFromScroll();
+      });
+    };
+
+    scrollContainer.addEventListener("scroll", onScroll);
+    updateActiveFromScroll();
+
+    this.activeDayCleanup = function () {
+      scrollContainer.removeEventListener("scroll", onScroll);
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+      }
+    };
+  };
+
+  EPGWidgetInstance.prototype.syncHeaderHeights = function () {
+    var grid = this.elements.body.querySelector(".epg-grid");
+    if (!grid) {
+      return;
+    }
+    var headers = grid.querySelectorAll(".epg-channel-header");
+    var timeHeader = grid.querySelector(".epg-time-header");
+    var timeInner = grid.querySelector(".epg-time-inner");
+    if (!headers.length || !timeHeader || !timeInner) {
+      return;
+    }
+    var maxHeight = 0;
     headers.forEach(function (header) {
-      observer.observe(header);
+      maxHeight = Math.max(maxHeight, header.offsetHeight);
     });
+    if (maxHeight <= 0) {
+      return;
+    }
+    this.state.headerHeight = maxHeight;
+    timeHeader.style.height = maxHeight + "px";
+    timeInner.style.paddingTop = maxHeight + "px";
   };
 
   EPGWidgetInstance.prototype.prepareDayData = function () {
@@ -946,6 +990,7 @@
     var gridScroll = createElement("div", "epg-grid-scroll");
     var grid = createElement("div", "epg-grid");
     var timeColumn = createElement("div", "epg-time-column border-end");
+    var timeHeader = createElement("div", "epg-time-header bg-body border-bottom", "");
     var timeInner = createElement("div", "epg-time-inner");
     var dayHeight = 24 * 60 * this.config.pxPerMinute;
     var totalHeight = this.state.dayKeys.length * dayHeight;
@@ -957,6 +1002,9 @@
       function (dayKey, index) {
         var dayOffset = index * dayHeight;
         this.state.dayOffsets[dayKey] = dayOffset;
+        var dayDivider = createElement("div", "epg-time-divider", "");
+        dayDivider.style.top = dayOffset + "px";
+        timeInner.appendChild(dayDivider);
         var marker = createElement("div", "epg-day-marker bg-body border-bottom", dayData.labels[dayKey] || dayKey);
         marker.style.top = dayOffset + "px";
         marker.setAttribute("data-day-key", dayKey);
@@ -971,6 +1019,7 @@
       }.bind(this)
     );
 
+    timeColumn.appendChild(timeHeader);
     timeColumn.appendChild(timeInner);
 
     var columnsWrapper = createElement("div", "epg-columns");

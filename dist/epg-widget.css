@@ -115,6 +115,13 @@
   z-index: 4;
 }
 
+.epg-time-header {
+  position: sticky;
+  top: 0;
+  background: var(--bs-body-bg);
+  z-index: 5;
+}
+
 .epg-time-inner {
   position: relative;
 }
@@ -124,6 +131,15 @@
   left: 0.5rem;
   font-size: 0.75rem;
   color: var(--bs-secondary-color);
+}
+
+.epg-time-divider {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background-color: var(--bs-border-color);
+  z-index: 1;
 }
 
 .epg-columns {
