@@ -1092,9 +1092,58 @@
       active.push({ endAt: group.endAt, laneIndex: laneIndex });
     });
 
+    var components = [];
+    var currentComponent = [];
+    var currentEnd = null;
+
     sorted.forEach(function (group) {
-      group.laneCount = Math.max(1, this.computeMaxOverlap(group, sorted));
-    }, this);
+      if (!currentComponent.length) {
+        currentComponent = [group];
+        currentEnd = group.endAt;
+        return;
+      }
+
+      if (group.startAt < currentEnd) {
+        currentComponent.push(group);
+        currentEnd = Math.max(currentEnd, group.endAt);
+        return;
+      }
+
+      components.push(currentComponent);
+      currentComponent = [group];
+      currentEnd = group.endAt;
+    });
+
+    if (currentComponent.length) {
+      components.push(currentComponent);
+    }
+
+    components.forEach(function (component) {
+      var events = [];
+      component.forEach(function (item) {
+        events.push({ time: item.startAt, delta: 1 });
+        events.push({ time: item.endAt, delta: -1 });
+      });
+
+      events.sort(function (a, b) {
+        if (a.time === b.time) {
+          return b.delta - a.delta;
+        }
+        return a.time - b.time;
+      });
+
+      var active = 0;
+      var maxActive = 0;
+      events.forEach(function (event) {
+        active += event.delta;
+        maxActive = Math.max(maxActive, active);
+      });
+
+      var laneCount = Math.max(1, maxActive || 1);
+      component.forEach(function (item) {
+        item.laneCount = laneCount;
+      });
+    });
 
     return sorted;
   };
