@@ -47,7 +47,7 @@
 
 ### 4. デモ
 
-`demo/index.html` をブラウザで開くか、簡易HTTPサーバを起動して確認します。
+`demo/index.html` は `fetch` でサンプルJSONを取得するため、簡易HTTPサーバを起動して確認します。
 
 ```bash
 python -m http.server 8000

@@ -23,11 +23,12 @@
 
     <script src="../dist/epg-widget.js"></script>
     <script>
+      const baseUrl = new URL(".", window.location.href);
       EPGWidget.mount("#epg-root", {
         endpoints: {
-          servicesUrl: "../api-sample/services.json",
-          channelsUrl: "../api-sample/channels.json",
-          programsUrl: "../api-sample/programs.json",
+          servicesUrl: new URL("../api-sample/services.json", baseUrl).href,
+          channelsUrl: new URL("../api-sample/channels.json", baseUrl).href,
+          programsUrl: new URL("../api-sample/programs.json", baseUrl).href,
         },
         initialTab: "GR",
         pxPerMinute: 2,
