@@ -154,6 +154,15 @@
     return el;
   }
 
+  function getServiceKey(service) {
+    if (!service) {
+      return "unknown:unknown";
+    }
+    var networkId = service.networkId != null ? service.networkId : "unknown";
+    var serviceId = service.serviceId != null ? service.serviceId : "unknown";
+    return networkId + ":" + serviceId;
+  }
+
   function EPGWidgetInstance(target, config) {
     this.target = target;
     this.config = mergeConfig(defaults, config || {});
@@ -678,7 +687,7 @@
               time: timeText,
               services: group.programs
                 .map(function (item) {
-                  return item.serviceId;
+                  return getServiceKey(item);
                 })
                 .join(", "),
             });
@@ -699,7 +708,7 @@
 
     var servicesById = {};
     services.forEach(function (service) {
-      servicesById[service.serviceId] = service;
+      servicesById[getServiceKey(service)] = service;
     });
 
     var pickMainService = function (serviceList) {
@@ -750,9 +759,9 @@
               return includeTypes.indexOf(service.type) !== -1;
             })
             .forEach(function (service) {
-              var fullService = servicesById[service.serviceId] || service;
+              var fullService = servicesById[getServiceKey(service)] || service;
               csColumns.push({
-                key: "CS-" + service.serviceId,
+                key: "CS-" + getServiceKey(service),
                 name: fullService.name || "(サービス名なし)",
                 services: [fullService],
                 mainService: fullService,
@@ -774,7 +783,7 @@
             return includeTypes.indexOf(service.type) !== -1;
           })
           .map(function (service) {
-            return servicesById[service.serviceId] || service;
+            return servicesById[getServiceKey(service)] || service;
           });
         if (filteredServices.length === 0) {
           return null;
@@ -796,15 +805,16 @@
   EPGWidgetInstance.prototype.collectProgramsForColumns = function (columns, dayPrograms) {
     var programsByService = {};
     dayPrograms.forEach(function (program) {
-      if (!programsByService[program.serviceId]) {
-        programsByService[program.serviceId] = [];
+      var programKey = getServiceKey(program);
+      if (!programsByService[programKey]) {
+        programsByService[programKey] = [];
       }
-      programsByService[program.serviceId].push(program);
+      programsByService[programKey].push(program);
     });
 
     return columns.map(function (column) {
       var serviceIds = column.services.map(function (service) {
-        return service.serviceId;
+        return getServiceKey(service);
       });
       return this.mergeProgramsForServices(serviceIds, programsByService);
     }, this);
@@ -823,10 +833,17 @@
           });
           if (sharedItems.length) {
             var sharedCandidates = sharedItems.map(function (item) {
-              return item.serviceId + ":" + item.eventId;
+              var relatedNetworkId = item.networkId != null ? item.networkId : program.networkId;
+              return relatedNetworkId + ":" + item.serviceId + ":" + item.eventId;
             });
             if (program.serviceId !== undefined && program.eventId !== undefined) {
-              sharedCandidates.push(program.serviceId + ":" + program.eventId);
+              sharedCandidates.push(
+                (program.networkId != null ? program.networkId : "unknown") +
+                  ":" +
+                  program.serviceId +
+                  ":" +
+                  program.eventId
+              );
             }
             sharedCandidates = Array.from(new Set(sharedCandidates)).filter(function (entry) {
               return entry.indexOf("undefined") === -1;

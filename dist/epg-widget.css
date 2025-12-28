@@ -74,7 +74,7 @@
 }
 
 .epg-grid-scroll {
-  overflow-x: auto;
+  overflow: visible;
   background-color: var(--bs-body-bg);
 }
 
