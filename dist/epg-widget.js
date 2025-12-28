@@ -736,24 +736,24 @@
             return item.type === "shared";
           });
           if (sharedItems.length) {
-            if (program.eventId !== undefined && program.eventId !== null) {
-              sharedKey =
-                "shared-" +
-                program.eventId +
-                "-" +
-                program.startAt +
-                "-" +
-                program.duration;
-            } else {
-              var combined = sharedItems
-                .map(function (item) {
-                  return item.serviceId + ":" + item.eventId;
-                })
-                .concat(program.serviceId + ":" + program.eventId);
-              combined = Array.from(new Set(combined));
-              combined.sort();
-              sharedKey = combined.join("|");
+            var sharedCandidates = sharedItems.map(function (item) {
+              return item.serviceId + ":" + item.eventId;
+            });
+            if (program.serviceId !== undefined && program.eventId !== undefined) {
+              sharedCandidates.push(program.serviceId + ":" + program.eventId);
             }
+            sharedCandidates = Array.from(new Set(sharedCandidates)).filter(function (entry) {
+              return entry.indexOf("undefined") === -1;
+            });
+            sharedCandidates.sort();
+            var canonicalShared = sharedCandidates[0] || program.eventId;
+            sharedKey =
+              "shared-" +
+              canonicalShared +
+              "-" +
+              program.startAt +
+              "-" +
+              program.duration;
           }
         }
         var fallbackName = program.name || "";
