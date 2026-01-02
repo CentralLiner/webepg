@@ -71,6 +71,20 @@
   position: relative;
 }
 
+.epg-grid-frame {
+  display: flex;
+  flex-direction: column;
+  min-width: 100%;
+}
+
+.epg-grid-header {
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 7;
+  background-color: var(--bs-body-bg);
+}
+
 .epg-day-loading {
   position: absolute;
   left: var(--epg-time-column-width);
@@ -98,6 +112,7 @@
   display: flex;
   min-width: 100%;
   align-items: flex-start;
+  position: relative;
 }
 
 .epg-time-column {
@@ -113,8 +128,10 @@
   position: sticky;
   top: 0;
   left: 0;
+  flex: 0 0 var(--epg-time-column-width);
+  width: var(--epg-time-column-width);
   background: var(--bs-body-bg);
-  z-index: 6;
+  z-index: 8;
 }
 
 .epg-time-inner {
@@ -155,9 +172,10 @@
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  position: sticky;
-  top: 0;
-  z-index: 3;
+  position: relative;
+  flex: 0 0 var(--epg-channel-width);
+  width: var(--epg-channel-width);
+  min-width: var(--epg-channel-min-width);
 }
 
 .epg-channel-title {

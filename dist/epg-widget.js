@@ -701,12 +701,13 @@
   };
 
   EPGWidgetInstance.prototype.syncHeaderHeights = function () {
+    var gridFrame = this.elements.body.querySelector(".epg-grid-frame");
     var grid = this.elements.body.querySelector(".epg-grid");
-    if (!grid) {
+    if (!gridFrame || !grid) {
       return;
     }
-    var headers = grid.querySelectorAll(".epg-channel-header");
-    var timeHeader = grid.querySelector(".epg-time-header");
+    var headers = gridFrame.querySelectorAll(".epg-channel-header");
+    var timeHeader = gridFrame.querySelector(".epg-time-header");
     var timeInner = grid.querySelector(".epg-time-inner");
     if (!headers.length || !timeHeader || !timeInner) {
       return;
@@ -720,7 +721,6 @@
     }
     this.state.headerHeight = maxHeight;
     timeHeader.style.height = maxHeight + "px";
-    timeInner.style.paddingTop = maxHeight + "px";
   };
 
   EPGWidgetInstance.prototype.prepareDayData = function () {
@@ -1039,9 +1039,11 @@
     }
 
     var gridScroll = createElement("div", "epg-grid-scroll");
+    var gridFrame = createElement("div", "epg-grid-frame");
+    var gridHeader = createElement("div", "epg-grid-header");
     var grid = createElement("div", "epg-grid");
     var timeColumn = createElement("div", "epg-time-column border-end");
-    var timeHeader = createElement("div", "epg-time-header bg-body border-bottom", "");
+    var timeHeader = createElement("div", "epg-time-header bg-body border-bottom border-end", "");
     var timeInner = createElement("div", "epg-time-inner");
     var dayHeight = 24 * 60 * this.config.pxPerMinute;
     var totalHeight = this.state.dayKeys.length * dayHeight;
@@ -1066,16 +1068,17 @@
       }.bind(this)
     );
 
-    timeColumn.appendChild(timeHeader);
     timeColumn.appendChild(timeInner);
 
     var columnsWrapper = createElement("div", "epg-columns");
     this.state.programContainers = [];
 
+    gridHeader.appendChild(timeHeader);
+
     columns.forEach(
       function (column, index) {
         var columnEl = createElement("div", "epg-channel-column border-end");
-        var header = createElement("div", "epg-channel-header bg-body border-bottom", "");
+        var header = createElement("div", "epg-channel-header bg-body border-bottom border-end", "");
         var title = createElement("div", "epg-channel-title", column.name);
         var meta = createElement("div", "epg-channel-meta", "");
         var primaryService = column.mainService || column.services[0];
@@ -1124,8 +1127,8 @@
           }
         }
 
-        columnEl.appendChild(header);
         columnEl.appendChild(programsContainer);
+        gridHeader.appendChild(header);
         columnsWrapper.appendChild(columnEl);
         this.state.programContainers.push(programsContainer);
       }.bind(this)
@@ -1133,7 +1136,9 @@
 
     grid.appendChild(timeColumn);
     grid.appendChild(columnsWrapper);
-    gridScroll.appendChild(grid);
+    gridFrame.appendChild(gridHeader);
+    gridFrame.appendChild(grid);
+    gridScroll.appendChild(gridFrame);
 
     this.state.dayKeys.forEach(
       function (dayKey) {
@@ -1148,7 +1153,7 @@
           '<span>番組情報を読み込み中...</span>' +
           "</div>";
         this.state.dayLoadingIndicators[dayKey] = dayLoading;
-        gridScroll.appendChild(dayLoading);
+        grid.appendChild(dayLoading);
       }.bind(this)
     );
     return gridScroll;
