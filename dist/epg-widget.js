@@ -1083,8 +1083,6 @@
     var columnsWrapper = createElement("div", "epg-columns");
     this.state.programContainers = [];
 
-    gridHeader.appendChild(timeHeader);
-
     columns.forEach(
       function (column, index) {
         var columnEl = createElement("div", "epg-channel-column border-end");
@@ -1146,6 +1144,7 @@
 
     grid.appendChild(timeColumn);
     grid.appendChild(columnsWrapper);
+    gridFrame.appendChild(timeHeader);
     gridFrame.appendChild(gridHeader);
     gridFrame.appendChild(grid);
     gridScroll.appendChild(gridFrame);
