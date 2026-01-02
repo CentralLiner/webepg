@@ -32,10 +32,72 @@
 | initialTab | "GR" \| "BS" \| "CS" | "GR" | 初期タブ |
 | includeServiceTypes | number[] | [1] | 表示対象のservice.type |
 | timezone | string | "Asia/Tokyo" | 表示時刻のタイムゾーン |
-| pxPerMinute | number | 2 | 1分あたりの高さ |
+| pxPerMinute | number | 4 | 1分あたりの高さ |
 | nowLine | boolean | true | 現在時刻ラインを表示 |
 | onProgramClick | function | null | 番組クリック時に呼び出されるコールバック |
 | logoResolver | function | null | serviceからロゴURLを返す関数 |
+| sources | array | null | 複数APIセットを指定する場合に使用（`endpoints`の代替） |
+| tabs | array | null | タブの定義（フィルター条件付きで追加可能） |
+
+### 2.1 複数API / カスタムタブの例
+
+```html
+<script>
+  EPGWidget.mount("#epg-root", {
+    sources: [
+      {
+        id: "main",
+        label: "本編",
+        endpoints: {
+          servicesUrl: "https://example.com/api/services",
+          channelsUrl: "https://example.com/api/channels",
+          programsUrl: "https://example.com/api/programs",
+        },
+      },
+      {
+        id: "sub",
+        label: "別データ",
+        endpoints: {
+          servicesUrl: "https://example.com/api2/services",
+          channelsUrl: "https://example.com/api2/channels",
+          programsUrl: "https://example.com/api2/programs",
+        },
+      },
+    ],
+    tabs: [
+      { id: "GR", label: "GR", sourceId: "main", channelTypes: ["GR"], mode: "grouped" },
+      { id: "BS", label: "BS", sourceId: "main", channelTypes: ["BS"], mode: "grouped" },
+      { id: "CS", label: "CS", sourceId: "main", channelTypes: ["CS"], mode: "service" },
+      {
+        id: "MAIN-ALL",
+        label: "本編まとめ",
+        sourceId: "main",
+        channelFilter: (channel) => ["GR", "BS"].includes(channel.type),
+        mode: "grouped",
+      },
+      {
+        id: "SUB-CS",
+        label: "別データCS",
+        sourceId: "sub",
+        channelTypes: ["CS"],
+        mode: "service",
+      },
+    ],
+  });
+</script>
+```
+
+`tabs` を省略すると、各ソースごとに `GR/BS/CS` のデフォルトタブを生成します（単一ソースの場合は従来どおり `GR/BS/CS` を利用）。
+
+`tabs` の主な項目は以下のとおりです。
+
+- `id`: タブID（`initialTab` と合わせる）
+- `label`: 表示ラベル
+- `sourceId`: `sources` のID
+- `channelTypes`: `channel.type` の条件配列（省略時は全件）
+- `channelFilter`: `channel` を受け取るフィルター関数（`channelTypes` より優先）
+- `serviceFilter`: `service` を受け取るフィルター関数
+- `mode`: `"grouped"`（GR/BS統合列）または `"service"`（サービス単位）
 
 ### 3. API期待形式（概要）
 
