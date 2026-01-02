@@ -244,6 +244,7 @@
     this.state = {
       currentTab: this.config.initialTab,
       scrollTop: 0,
+      hasInitialScroll: false,
       data: null,
       dayKeys: [],
       renderedDays: new Set(),
@@ -252,6 +253,7 @@
     this.elements = {};
     this.programIndex = new Map();
     this.observer = null;
+    this.nowLineTimer = null;
     this.init();
   }
 
@@ -568,6 +570,10 @@
     if (this.observer) {
       this.observer.disconnect();
     }
+    if (this.nowLineTimer) {
+      clearInterval(this.nowLineTimer);
+      this.nowLineTimer = null;
+    }
 
     this.programIndex.clear();
     this.state.renderedDays = new Set();
@@ -614,9 +620,13 @@
     this.syncHeaderHeights();
     this.observeSections(dayData);
     this.observeActiveDay();
+    this.startNowLineTicker();
 
     if (this.state.scrollTop) {
       scrollContainer.scrollTop = this.state.scrollTop;
+    } else if (!this.state.hasInitialScroll) {
+      this.scrollToNow();
+      this.state.hasInitialScroll = true;
     }
   };
 
@@ -1157,6 +1167,60 @@
       }.bind(this)
     );
     return gridScroll;
+  };
+
+  EPGWidgetInstance.prototype.updateNowLinePosition = function () {
+    if (!this.config.nowLine || !this.state.dayOffsets) {
+      return;
+    }
+    var now = new Date();
+    var nowKey = getDayKey(now, this.config.timezone);
+    var dayOffset = this.state.dayOffsets[nowKey];
+    var nowLines = this.elements.body.querySelectorAll(".epg-now-line");
+    if (!nowLines.length) {
+      return;
+    }
+    if (dayOffset === undefined) {
+      nowLines.forEach(function (line) {
+        line.style.display = "none";
+      });
+      return;
+    }
+    var top =
+      dayOffset + getMinutesSinceMidnight(now, this.config.timezone) * this.config.pxPerMinute + "px";
+    nowLines.forEach(function (line) {
+      line.style.display = "block";
+      line.style.top = top;
+    });
+  };
+
+  EPGWidgetInstance.prototype.startNowLineTicker = function () {
+    if (!this.config.nowLine) {
+      return;
+    }
+    this.updateNowLinePosition();
+    this.nowLineTimer = setInterval(
+      function () {
+        this.updateNowLinePosition();
+      }.bind(this),
+      30000
+    );
+  };
+
+  EPGWidgetInstance.prototype.scrollToNow = function () {
+    var scrollContainer = this.elements.body.querySelector(".epg-scroll-container");
+    if (!scrollContainer) {
+      return;
+    }
+    var now = new Date();
+    var nowKey = getDayKey(now, this.config.timezone);
+    var dayOffset = this.state.dayOffsets ? this.state.dayOffsets[nowKey] : undefined;
+    if (dayOffset === undefined) {
+      return;
+    }
+    var headerOffset = this.state.headerHeight || 0;
+    var top = dayOffset + getMinutesSinceMidnight(now, this.config.timezone) * this.config.pxPerMinute;
+    scrollContainer.scrollTop = Math.max(0, top - headerOffset);
   };
 
   EPGWidgetInstance.prototype.layoutPrograms = function (groups) {

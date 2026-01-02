@@ -1,7 +1,7 @@
 .epg-widget {
   font-family: "Helvetica Neue", Arial, "Noto Sans JP", sans-serif;
   color: var(--bs-body-color);
-  --epg-time-column-width: 56px;
+  --epg-time-column-width: 24px;
   --epg-channel-width: 176px;
   --epg-channel-min-width: 160px;
 }
@@ -206,7 +206,7 @@
   background-color: rgba(13, 110, 253, 0.15);
   color: var(--bs-body-color);
   cursor: pointer;
-  overflow: hidden;
+  overflow: visible;
 }
 
 [data-bs-theme="dark"] .epg-program {
@@ -251,19 +251,13 @@
 .epg-program-title {
   font-size: 0.8rem;
   font-weight: 600;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  display: block;
 }
 
 .epg-program-summary {
   font-size: 0.72rem;
   color: var(--bs-secondary-color);
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  display: block;
   line-height: 1.3;
 }
 
