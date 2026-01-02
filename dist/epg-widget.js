@@ -1056,9 +1056,11 @@
       function (dayKey, index) {
         var dayOffset = index * dayHeight;
         this.state.dayOffsets[dayKey] = dayOffset;
-        var dayDivider = createElement("div", "epg-time-divider", "");
-        dayDivider.style.top = dayOffset + "px";
-        timeInner.appendChild(dayDivider);
+        if (index > 0) {
+          var dayDivider = createElement("div", "epg-time-divider", "");
+          dayDivider.style.top = dayOffset + "px";
+          timeInner.appendChild(dayDivider);
+        }
         var marker = createElement("div", "epg-day-marker bg-body border-bottom", dayData.labels[dayKey] || dayKey);
         marker.style.top = dayOffset + "px";
         marker.setAttribute("data-day-key", dayKey);
