@@ -19,7 +19,7 @@
     initialTab: "GR",
     includeServiceTypes: [1],
     timezone: "Asia/Tokyo",
-    pxPerMinute: 2.4,
+    pxPerMinute: 4.8,
     nowLine: true,
     onProgramClick: null,
     logoResolver: null,
