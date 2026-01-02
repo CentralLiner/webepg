@@ -56,17 +56,6 @@
   overflow: auto;
 }
 
-.epg-day-marker {
-  position: absolute;
-  left: var(--epg-time-column-width);
-  right: 0;
-  padding: 0.35rem 0.5rem;
-  font-weight: 600;
-  font-size: 0.8rem;
-  color: var(--bs-body-color);
-  z-index: 2;
-}
-
 .epg-day-divider {
   position: absolute;
   left: 0;

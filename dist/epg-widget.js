@@ -344,11 +344,11 @@
         return;
       }
       var dayKey = button.getAttribute("data-epg-day");
-      var marker = this.elements.body.querySelector(
-        '.epg-day-marker[data-day-key="' + dayKey + '"]'
+      var dayTarget = this.elements.body.querySelector(
+        '.epg-day-loading[data-day-key="' + dayKey + '"]'
       );
-      if (marker) {
-        marker.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (dayTarget) {
+        dayTarget.scrollIntoView({ behavior: "smooth", block: "start" });
       }
     }.bind(this);
 
@@ -622,9 +622,6 @@
 
   EPGWidgetInstance.prototype.observeSections = function (dayData) {
     var markers = this.elements.body.querySelectorAll(".epg-day-loading[data-day-key]");
-    if (markers.length === 0) {
-      markers = this.elements.body.querySelectorAll(".epg-day-marker[data-day-key]");
-    }
     var renderSection = function (marker) {
       var dayKey = marker.getAttribute("data-day-key");
       this.renderDayPrograms(dayKey);
@@ -1061,12 +1058,6 @@
           dayDivider.style.top = dayOffset + "px";
           timeInner.appendChild(dayDivider);
         }
-        var marker = createElement("div", "epg-day-marker bg-body border-bottom", dayData.labels[dayKey] || dayKey);
-        marker.style.top = dayOffset + "px";
-        marker.setAttribute("data-day-key", dayKey);
-        marker.setAttribute("data-day-header", dayKey);
-        gridScroll.appendChild(marker);
-
         for (var hour = 0; hour < 24; hour += 1) {
           var label = createElement("div", "epg-time-label text-body", hour.toString().padStart(2, "0"));
           label.style.top = dayOffset + hour * 60 * this.config.pxPerMinute + "px";
