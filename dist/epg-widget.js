@@ -19,13 +19,13 @@
     initialTab: "GR",
     includeServiceTypes: [1],
     timezone: "Asia/Tokyo",
-    pxPerMinute: 4.8,
+    pxPerMinute: 4,
     nowLine: true,
     onProgramClick: null,
     logoResolver: null,
+    sources: null,
+    tabs: null,
   };
-
-  var tabTypes = ["GR", "BS", "CS"];
 
   function mergeConfig(base, overrides) {
     var result = {};
@@ -40,6 +40,86 @@
       result[key] = overrides[key];
     });
     return result;
+  }
+
+  function normalizeSources(config) {
+    if (Array.isArray(config.sources) && config.sources.length) {
+      return config.sources.map(function (source, index) {
+        var endpoints = source.endpoints || source;
+        return {
+          id: source.id || "source-" + (index + 1),
+          label: source.label || "",
+          endpoints: {
+            servicesUrl: endpoints.servicesUrl || "",
+            channelsUrl: endpoints.channelsUrl || "",
+            programsUrl: endpoints.programsUrl || "",
+          },
+        };
+      });
+    }
+    return [
+      {
+        id: "default",
+        label: "",
+        endpoints: {
+          servicesUrl: (config.endpoints || {}).servicesUrl || "",
+          channelsUrl: (config.endpoints || {}).channelsUrl || "",
+          programsUrl: (config.endpoints || {}).programsUrl || "",
+        },
+      },
+    ];
+  }
+
+  function normalizeTabs(config, sources) {
+    if (Array.isArray(config.tabs) && config.tabs.length) {
+      return config.tabs.map(function (tab, index) {
+        var sourceId = tab.sourceId || (sources[0] ? sources[0].id : "default");
+        var id = tab.id || tab.key || tab.label || "tab-" + (index + 1);
+        return {
+          id: id,
+          label: tab.label || id,
+          sourceId: sourceId,
+          channelTypes: tab.channelTypes || tab.channelType || null,
+          channelFilter: typeof tab.channelFilter === "function" ? tab.channelFilter : null,
+          serviceFilter: typeof tab.serviceFilter === "function" ? tab.serviceFilter : null,
+          mode: tab.mode || tab.layout || "grouped",
+        };
+      });
+    }
+
+    var defaultTabs = [];
+    sources.forEach(function (source) {
+      var prefix = source.label || source.id || "";
+      var usePrefix = sources.length > 1 && prefix;
+      var makeLabel = function (suffix) {
+        return usePrefix ? prefix + " " + suffix : suffix;
+      };
+      var makeId = function (suffix) {
+        return sources.length > 1 ? source.id + ":" + suffix : suffix;
+      };
+      defaultTabs.push({
+        id: makeId("GR"),
+        label: makeLabel("GR"),
+        sourceId: source.id,
+        channelTypes: ["GR"],
+        mode: "grouped",
+      });
+      defaultTabs.push({
+        id: makeId("BS"),
+        label: makeLabel("BS"),
+        sourceId: source.id,
+        channelTypes: ["BS"],
+        mode: "grouped",
+      });
+      defaultTabs.push({
+        id: makeId("CS"),
+        label: makeLabel("CS"),
+        sourceId: source.id,
+        channelTypes: ["CS"],
+        mode: "service",
+      });
+    });
+    return defaultTabs;
   }
 
   function resolveTarget(target) {
@@ -245,10 +325,12 @@
       currentTab: this.config.initialTab,
       scrollTop: 0,
       hasInitialScroll: false,
-      data: null,
+      dataBySource: {},
       dayKeys: [],
       renderedDays: new Set(),
       dayLoadingIndicators: {},
+      tabs: [],
+      sources: [],
     };
     this.elements = {};
     this.programIndex = new Map();
@@ -258,6 +340,12 @@
   }
 
   EPGWidgetInstance.prototype.init = function () {
+    this.state.sources = normalizeSources(this.config);
+    this.state.tabs = normalizeTabs(this.config, this.state.sources);
+    if (!this.state.tabs.find(function (tab) { return tab.id === this.state.currentTab; }.bind(this))) {
+      this.state.currentTab = this.state.tabs.length ? this.state.tabs[0].id : this.config.initialTab;
+    }
+
     this.target.innerHTML = "";
     this.target.classList.add("epg-widget");
 
@@ -265,22 +353,6 @@
     var header = createElement("div", "epg-header");
     var tabs = createElement("ul", "nav nav-tabs epg-tabs");
     tabs.setAttribute("role", "tablist");
-
-    tabTypes.forEach(
-      function (tabType) {
-        var li = createElement("li", "nav-item");
-        var button = createElement(
-          "button",
-          "nav-link" + (tabType === this.state.currentTab ? " active" : ""),
-          tabType
-        );
-        button.type = "button";
-        button.setAttribute("role", "tab");
-        button.setAttribute("data-epg-tab", tabType);
-        li.appendChild(button);
-        tabs.appendChild(li);
-      }.bind(this)
-    );
 
     var dateLinks = createElement("div", "epg-date-links");
 
@@ -346,6 +418,16 @@
         return;
       }
       var dayKey = button.getAttribute("data-epg-day");
+      var scrollContainer = this.elements.body.querySelector(".epg-scroll-container");
+      var dayOffset = this.state.dayOffsets ? this.state.dayOffsets[dayKey] : undefined;
+      if (scrollContainer && dayOffset !== undefined) {
+        var headerOffset = this.state.headerHeight || 0;
+        scrollContainer.scrollTo({
+          top: Math.max(0, dayOffset - headerOffset),
+          behavior: "smooth",
+        });
+        return;
+      }
       var dayTarget = this.elements.body.querySelector(
         '.epg-day-loading[data-day-key="' + dayKey + '"]'
       );
@@ -402,7 +484,7 @@
 
     this.handleResize = debounce(
       function () {
-        if (this.state.data) {
+        if (Object.keys(this.state.dataBySource || {}).length) {
           this.renderBody();
         }
       }.bind(this),
@@ -489,8 +571,19 @@
   };
 
   EPGWidgetInstance.prototype.load = function () {
-    var endpoints = this.config.endpoints || {};
-    if (!endpoints.servicesUrl || !endpoints.channelsUrl || !endpoints.programsUrl) {
+    var sources = this.state.sources || [];
+    if (!sources.length) {
+      this.showError("エンドポイントの設定が不足しています。");
+      return;
+    }
+    var invalidSource = sources.find(function (source) {
+      return (
+        !source.endpoints.servicesUrl ||
+        !source.endpoints.channelsUrl ||
+        !source.endpoints.programsUrl
+      );
+    });
+    if (invalidSource) {
       this.showError("エンドポイントの設定が不足しています。");
       return;
     }
@@ -498,18 +591,49 @@
     this.elements.loading.classList.remove("d-none");
     this.elements.alert.classList.add("d-none");
 
-    Promise.all([
-      fetchJson(endpoints.servicesUrl),
-      fetchJson(endpoints.channelsUrl),
-      fetchJson(endpoints.programsUrl),
-    ])
+    Promise.all(
+      sources.map(function (source) {
+        return Promise.all([
+          fetchJson(source.endpoints.servicesUrl),
+          fetchJson(source.endpoints.channelsUrl),
+          fetchJson(source.endpoints.programsUrl),
+        ]).then(function (responses) {
+          return {
+            id: source.id,
+            data: {
+              services: responses[0],
+              channels: responses[1],
+              programs: responses[2],
+            },
+          };
+        });
+      })
+    )
       .then(
         function (responses) {
-          this.state.data = {
-            services: responses[0],
-            channels: responses[1],
-            programs: responses[2],
-          };
+          this.state.dataBySource = {};
+          responses.forEach(
+            function (entry) {
+              this.state.dataBySource[entry.id] = entry.data;
+            }.bind(this)
+          );
+          this.state.tabs = normalizeTabs(this.config, this.state.sources);
+          this.state.tabs = this.state.tabs.filter(
+            function (tab) {
+              var data = this.state.dataBySource[tab.sourceId];
+              if (!data) {
+                return false;
+              }
+              return this.buildColumns(tab, data).length > 0;
+            }.bind(this)
+          );
+          if (
+            !this.state.tabs.find(function (tab) {
+              return tab.id === this.state.currentTab;
+            }.bind(this))
+          ) {
+            this.state.currentTab = this.state.tabs.length ? this.state.tabs[0].id : this.config.initialTab;
+          }
           this.elements.loading.classList.add("d-none");
           this.renderTabs();
           this.buildDayKeys();
@@ -531,13 +655,36 @@
   };
 
   EPGWidgetInstance.prototype.renderTabs = function () {
-    Array.prototype.forEach.call(this.elements.tabs.querySelectorAll(".nav-link"), function (tab) {
-      if (tab.getAttribute("data-epg-tab") === this.state.currentTab) {
-        tab.classList.add("active");
-      } else {
-        tab.classList.remove("active");
-      }
-    }, this);
+    this.elements.tabs.innerHTML = "";
+    this.state.tabs.forEach(
+      function (tab) {
+        var li = createElement("li", "nav-item");
+        var button = createElement(
+          "button",
+          "nav-link" + (tab.id === this.state.currentTab ? " active" : ""),
+          tab.label
+        );
+        button.type = "button";
+        button.setAttribute("role", "tab");
+        button.setAttribute("data-epg-tab", tab.id);
+        li.appendChild(button);
+        this.elements.tabs.appendChild(li);
+      }.bind(this)
+    );
+  };
+
+  EPGWidgetInstance.prototype.getCurrentTabDefinition = function () {
+    return this.state.tabs.find(
+      function (tab) {
+        return tab.id === this.state.currentTab;
+      }.bind(this)
+    );
+  };
+
+  EPGWidgetInstance.prototype.getCurrentSourceData = function () {
+    var tab = this.getCurrentTabDefinition();
+    var sourceId = tab ? tab.sourceId : this.state.sources[0] ? this.state.sources[0].id : null;
+    return sourceId ? this.state.dataBySource[sourceId] : null;
   };
 
   EPGWidgetInstance.prototype.buildDayKeys = function () {
@@ -563,7 +710,12 @@
   };
 
   EPGWidgetInstance.prototype.renderBody = function () {
-    if (!this.state.data) {
+    var data = this.getCurrentSourceData();
+    var currentTab = this.getCurrentTabDefinition();
+    if (!data || !currentTab) {
+      var emptyState = createElement("div", "epg-empty text-center text-body", "番組情報がありません。");
+      this.elements.body.innerHTML = "";
+      this.elements.body.appendChild(emptyState);
       return;
     }
 
@@ -584,8 +736,8 @@
     this.elements.body.innerHTML = "";
     this.elements.body.appendChild(scrollContainer);
 
-    var dayData = this.prepareDayData();
-    var columns = this.buildColumns();
+    var dayData = this.prepareDayData(data);
+    var columns = this.buildColumns(currentTab, data);
     var columnProgramsByDay = {};
     var totalPrograms = 0;
 
@@ -733,7 +885,7 @@
     timeHeader.style.height = maxHeight + "px";
   };
 
-  EPGWidgetInstance.prototype.prepareDayData = function () {
+  EPGWidgetInstance.prototype.prepareDayData = function (data) {
     var timeZone = this.config.timezone;
     var daySet = new Set(this.state.dayKeys);
     var byDay = {};
@@ -745,7 +897,7 @@
       labels[key] = formatDayLabel(date, timeZone);
     });
 
-    this.state.data.programs.forEach(
+    (data.programs || []).forEach(
       function (program) {
         var date = new Date(program.startAt);
         var dayKey = getDayKey(date, timeZone);
@@ -853,10 +1005,10 @@
     delete this.state.dayLoadingIndicators[dayKey];
   };
 
-  EPGWidgetInstance.prototype.buildColumns = function () {
+  EPGWidgetInstance.prototype.buildColumns = function (tab, data) {
     var includeTypes = this.config.includeServiceTypes || [1];
-    var services = this.state.data.services || [];
-    var channels = this.state.data.channels || [];
+    var services = data.services || [];
+    var channels = data.channels || [];
 
     var servicesById = {};
     services.forEach(function (service) {
@@ -899,41 +1051,52 @@
       });
     };
 
-    if (this.state.currentTab === "CS") {
-      var csColumns = [];
+    var channelMatches = function (channel) {
+      if (tab.channelFilter && typeof tab.channelFilter === "function") {
+        return tab.channelFilter(channel);
+      }
+      if (tab.channelTypes) {
+        var types = Array.isArray(tab.channelTypes) ? tab.channelTypes : [tab.channelTypes];
+        return types.indexOf(channel.type) !== -1;
+      }
+      return true;
+    };
+
+    var serviceMatches = function (service) {
+      if (includeTypes.indexOf(service.type) === -1) {
+        return false;
+      }
+      if (tab.serviceFilter && typeof tab.serviceFilter === "function") {
+        return tab.serviceFilter(service);
+      }
+      return true;
+    };
+
+    if (tab.mode === "service") {
+      var serviceColumns = [];
       channels
-        .filter(function (channel) {
-          return channel.type === "CS";
-        })
+        .filter(channelMatches)
         .forEach(function (channel) {
-          channel.services
-            .filter(function (service) {
-              return includeTypes.indexOf(service.type) !== -1;
-            })
+          (channel.services || [])
+            .filter(serviceMatches)
             .forEach(function (service) {
               var fullService = servicesById[getServiceKey(service)] || service;
-              csColumns.push({
-                key: "CS-" + getServiceKey(service),
+              serviceColumns.push({
+                key: (tab.id || "tab") + "-" + getServiceKey(service),
                 name: fullService.name || "(サービス名なし)",
                 services: [fullService],
                 mainService: fullService,
               });
             });
         });
-      return sortColumns(csColumns);
+      return sortColumns(serviceColumns);
     }
 
-    var grBsColumns = channels
-      .filter(
-        function (channel) {
-          return channel.type === this.state.currentTab;
-        }.bind(this)
-      )
+    var groupedColumns = channels
+      .filter(channelMatches)
       .map(function (channel) {
-        var filteredServices = channel.services
-          .filter(function (service) {
-            return includeTypes.indexOf(service.type) !== -1;
-          })
+        var filteredServices = (channel.services || [])
+          .filter(serviceMatches)
           .map(function (service) {
             return servicesById[getServiceKey(service)] || service;
           });
@@ -942,7 +1105,7 @@
         }
         var mainService = pickMainService(filteredServices);
         return {
-          key: channel.type + "-" + channel.channel,
+          key: (tab.id || "tab") + "-" + channel.channel,
           name: (mainService && mainService.name) || channel.name || channel.channel,
           services: filteredServices,
           mainService: mainService,
@@ -951,7 +1114,7 @@
       .filter(function (col) {
         return col !== null;
       });
-    return sortColumns(grBsColumns);
+    return sortColumns(groupedColumns);
   };
 
   EPGWidgetInstance.prototype.collectProgramsForColumns = function (columns, dayPrograms) {
