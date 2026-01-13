@@ -3,6 +3,22 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script>
+      (() => {
+        const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+        const root = document.documentElement;
+        const applyTheme = () => {
+          const theme = media && media.matches ? "dark" : "light";
+          root.setAttribute("data-bs-theme", theme);
+        };
+        applyTheme();
+        if (media?.addEventListener) {
+          media.addEventListener("change", applyTheme);
+        } else if (media?.addListener) {
+          media.addListener(applyTheme);
+        }
+      })();
+    </script>
     <title>EPG Widget Demo</title>
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
@@ -11,12 +27,18 @@
       crossorigin="anonymous"
     />
     <link rel="stylesheet" href="../dist/epg-widget.css" />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/earlyaccess/notosansjp.css">
+    <style>
+      body {
+        font-family: "Noto Sans JP", sans-serif;
+      }
+    </style>
   </head>
-  <body data-bs-theme="dark" class="bg-body text-body">
+  <body class="bg-body text-body">
     <div class="container py-4">
       <h1 class="mb-3">Web番組表（EPG）埋め込みモジュール</h1>
       <p class="text-secondary">
-        GR/BS/CSタブの切り替え、日付リンクによるスクロール、縦スクロール8日連続表示を確認できます。
+        GR/BS/CSタブの切り替え、日付リンクによるスクロール、前日を含む縦スクロール表示を確認できます。
       </p>
       <div id="epg-root"></div>
     </div>
@@ -30,25 +52,36 @@
             id: "main",
             label: "標準",
             endpoints: {
-              servicesUrl: new URL("/api-sample/services.json", baseUrl).href,
-              channelsUrl: new URL("/api-sample/channels.json", baseUrl).href,
-              programsUrl: new URL("/api-sample/programs.json", baseUrl).href,
+              servicesUrl: new URL("https://celive.cela.me/static/api/services.json", baseUrl).href,
+              channelsUrl: new URL("https://celive.cela.me/static/api/channels.json", baseUrl).href,
+              programsUrl: new URL("https://celive.cela.me/eaapi/programs", baseUrl).href,
             },
+            channelWidth: 60,
+            channelMinWidth: 60,
+            multiServiceWidth: 2600,
+            multiServiceMinWidth: 2600,
           },
         ],
         tabs: [
-          { id: "GR", label: "GR", sourceId: "main", channelTypes: ["GR"], mode: "grouped" },
-          { id: "BS", label: "BS", sourceId: "main", channelTypes: ["BS"], mode: "grouped" },
-          { id: "CS", label: "CS", sourceId: "main", channelTypes: ["CS"], mode: "service" },
           {
-            id: "GR+BS",
-            label: "GR+BS",
+            id: "GR-Z",
+            label: "地上波(逗子)",
             sourceId: "main",
-            channelFilter: (channel) => ["GR", "BS"].includes(channel.type),
+            channelFilter: (channel) => channel.tuner === "celive-z" && channel.type === "GR",
             mode: "grouped",
           },
+          {
+            id: "GR-T",
+            label: "地上波(多治見)",
+            sourceId: "main",
+            channelFilter: (channel) => channel.tuner === "celive-t" && channel.type === "GR",
+            mode: "grouped",
+          },
+          { id: "BS", label: "BS", sourceId: "main", channelTypes: ["BS"], mode: "grouped" },
+          { id: "CS", label: "CS", sourceId: "main", channelTypes: ["CS"], mode: "service" },
         ],
-        initialTab: "GR",
+        initialTab: "GR-T",
+        programsFetchMode: "range",
         pxPerMinute: 4,
       });
     </script>

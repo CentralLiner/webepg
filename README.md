@@ -1,6 +1,6 @@
 # Web番組表（EPG）埋め込みモジュール
 
-既存Webサイトに「テレビ番組表」を埋め込むクライアントサイドJSモジュールです。Bootstrap 5.3（ダークモード）に馴染むUIを提供し、GR/BS/CSタブと8日連続の縦スクロール表示に対応します。
+既存Webサイトに「テレビ番組表」を埋め込むクライアントサイドJSモジュールです。Bootstrap 5.3（ダークモード）に馴染むUIを提供し、GR/BS/CSタブと前日を含む連続縦スクロール表示に対応します。
 
 ## 使い方
 
@@ -27,17 +27,26 @@
 | --- | --- | --- | --- |
 | endpoints.servicesUrl | string | 必須 | サービス一覧API |
 | endpoints.channelsUrl | string | 必須 | チャンネル束API |
-| endpoints.programsUrl | string | 必須 | 番組一覧API（8日分一括） |
-| days | number | 8 | 表示する日数 |
+| endpoints.programsUrl | string | 必須 | 番組一覧API（service/期間指定クエリ対応） |
+| programsFetchMode | "range" \| "bulk" | "range" | 番組取得方式（"range"は期間クエリで逐次取得、"bulk"は全件一括） |
+| days | number | 8 | 今日から先の表示日数 |
+| daysBefore | number | 1 | 今日より前に表示する日数（前日は表示されますが日付リンクは追加しません） |
 | initialTab | "GR" \| "BS" \| "CS" | "GR" | 初期タブ |
 | includeServiceTypes | number[] | [1] | 表示対象のservice.type |
 | timezone | string | "Asia/Tokyo" | 表示時刻のタイムゾーン |
 | pxPerMinute | number | 4 | 1分あたりの高さ |
+| channelWidth | number \| string | 160 | 通常チャンネル列の幅（数値はpx） |
+| channelMinWidth | number \| string | 144 | 通常チャンネル列の最小幅（数値はpx） |
+| multiServiceWidth | number \| string | 192 | 複数serviceを含む列のうち、同時刻に別番組がある場合（マルチ編成）の列幅（数値はpx） |
+| multiServiceMinWidth | number \| string | 176 | 複数serviceを含む列のうち、同時刻に別番組がある場合（マルチ編成）の最小幅（数値はpx） |
 | nowLine | boolean | true | 現在時刻ラインを表示 |
 | onProgramClick | function | null | 番組クリック時に呼び出されるコールバック |
-| logoResolver | function | null | serviceからロゴURLを返す関数 |
+| logoResolver | function | null | serviceからロゴURLを返す関数（未指定時はhasLogoDataがtrueのときに https://celive.cela.me/static/logo/<networkId>_<logoId>.png を使用） |
 | sources | array | null | 複数APIセットを指定する場合に使用（`endpoints`の代替） |
 | tabs | array | null | タブの定義（フィルター条件付きで追加可能） |
+
+`channelWidth` / `channelMinWidth` / `multiServiceWidth` / `multiServiceMinWidth` は数値指定でpx、文字列指定でCSSの長さ指定（例: `"12rem"`）が使えます。`channelMinWidth` と `multiServiceMinWidth` を省略した場合はそれぞれ `channelWidth` / `multiServiceWidth` と同じ値が使われます。
+マルチ編成の判定は、同一列で同時刻に別番組があるかどうかを各日付セクション描画時に確認して反映します。
 
 ### 2.1 複数API / カスタムタブの例
 
@@ -103,7 +112,15 @@
 
 - `servicesUrl`: サービス一覧（ロゴ・リモコン番号など）
 - `channelsUrl`: 物理チャンネル束（GR/BSは1要素=1列の基準）
-- `programsUrl`: 8日分番組リスト（`startAt`はUNIXミリ秒）
+- `programsUrl`: 番組リスト（`startAt`はUNIXミリ秒）
+
+`programsFetchMode: "range"` の場合、以下のクエリでサービス・日付ごとに取得します（`since`/`until` は `startAt` を含む範囲、UNIXミリ秒）。
+
+```
+programsUrl?network_id=<networkId>&service_id=<serviceId>&since=<since>&until=<until>
+```
+
+`programsFetchMode: "bulk"` を指定した場合は、`programsUrl` が表示範囲（`daysBefore + days` 日分）を返す前提で動作します。
 
 `programsUrl` は `relatedItems` の `type="shared"` を優先してサイマル判定し、無い場合は `(startAt, duration, name)` が一致する番組を同一扱いにします。
 
