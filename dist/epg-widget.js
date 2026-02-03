@@ -602,6 +602,14 @@
 
     body.appendChild(alert);
 
+    var dayOverlay = createElement("div", "epg-loading-overlay d-none");
+    dayOverlay.innerHTML =
+      '<div class="epg-day-loading-inner text-body-secondary">' +
+      '<div class="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></div>' +
+      "<span>番組情報を読み込み中...</span>" +
+      "</div>";
+    body.appendChild(dayOverlay);
+
     var modal = this.createModal();
 
     wrapper.appendChild(header);
@@ -618,6 +626,7 @@
     this.elements.loading = loading;
     this.elements.alert = alert;
     this.elements.retry = retry;
+    this.elements.dayOverlay = dayOverlay;
     this.elements.modal = modal;
 
     this.attachEvents();
@@ -1055,6 +1064,10 @@
     this.elements.loading.classList.add("d-none");
     this.elements.alert.classList.add("d-none");
     this.elements.body.appendChild(scrollContainer);
+    if (this.elements.dayOverlay) {
+      this.elements.dayOverlay.classList.add("d-none");
+      this.elements.body.appendChild(this.elements.dayOverlay);
+    }
 
     var columns = this.buildColumns(currentTab, data);
 
@@ -1090,6 +1103,7 @@
       this.scrollToNow();
       this.state.hasInitialScroll = true;
     }
+    this.updateDayOverlay(scrollContainer);
   };
 
   EPGWidgetInstance.prototype.observeSections = function () {
@@ -1148,6 +1162,7 @@
       if (dayKey) {
         setActive(dayKey);
       }
+      this.updateDayOverlay(scrollContainer);
     }.bind(this);
 
     var rafId = null;
@@ -1170,6 +1185,41 @@
         cancelAnimationFrame(rafId);
       }
     };
+  };
+
+  EPGWidgetInstance.prototype.updateDayOverlay = function (scrollContainer) {
+    var overlay = this.elements.dayOverlay;
+    if (!overlay) {
+      return;
+    }
+    var dayRequests = this.state.dayRequests || {};
+    var keys = Object.keys(dayRequests);
+    if (!keys.length) {
+      overlay.classList.add("d-none");
+      return;
+    }
+    var container = scrollContainer || this.elements.body.querySelector(".epg-scroll-container");
+    if (!container) {
+      overlay.classList.add("d-none");
+      return;
+    }
+    var viewHeight = container.clientHeight;
+    if (!viewHeight || !this.state.dayOffsets) {
+      overlay.classList.remove("d-none");
+      return;
+    }
+    var scrollTop = container.scrollTop;
+    var dayHeight = 24 * 60 * this.config.pxPerMinute;
+    var hasVisibleRequest = keys.some(
+      function (dayKey) {
+        var dayOffset = this.state.dayOffsets[dayKey];
+        if (dayOffset === undefined) {
+          return false;
+        }
+        return dayOffset + dayHeight >= scrollTop && dayOffset <= scrollTop + viewHeight;
+      }.bind(this)
+    );
+    overlay.classList.toggle("d-none", !hasVisibleRequest);
   };
 
   EPGWidgetInstance.prototype.syncHeaderHeights = function () {
@@ -1360,8 +1410,10 @@
     }
 
     var renderToken = this.state.renderToken;
+    var self = this;
     var cleanup = function () {
       delete dayRequests[dayKey];
+      self.updateDayOverlay();
     };
 
     dayRequests[dayKey] = this.getProgramsForDay(dayKey, columns)
@@ -1512,6 +1564,7 @@
           this.showError("番組情報の取得に失敗しました: " + error.message);
         }.bind(this)
       );
+    this.updateDayOverlay();
   };
 
   EPGWidgetInstance.prototype.applyProgramHoverOverflow = function (candidates, renderToken) {
@@ -1890,11 +1943,7 @@
         dayLoading.style.top = dayOffset + "px";
         dayLoading.style.height = dayHeight + "px";
         dayLoading.setAttribute("data-day-key", dayKey);
-        dayLoading.innerHTML =
-          '<div class="epg-day-loading-inner text-body-secondary">' +
-          '<div class="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></div>' +
-          '<span>番組情報を読み込み中...</span>' +
-          "</div>";
+        dayLoading.setAttribute("aria-hidden", "true");
         this.state.dayLoadingIndicators[dayKey] = dayLoading;
         grid.appendChild(dayLoading);
       }.bind(this)

@@ -47,6 +47,10 @@
     <script>
       const baseUrl = window.location.origin;
       EPGWidget.mount("#epg-root", {
+              channelWidth: 160,
+            channelMinWidth: 140,
+            multiServiceWidth: 200,
+            multiServiceMinWidth: 160,
         sources: [
           {
             id: "main",
@@ -56,10 +60,6 @@
               channelsUrl: new URL("https://celive.cela.me/static/api/channels.json", baseUrl).href,
               programsUrl: new URL("https://celive.cela.me/eaapi/programs", baseUrl).href,
             },
-            channelWidth: 60,
-            channelMinWidth: 60,
-            multiServiceWidth: 2600,
-            multiServiceMinWidth: 2600,
           },
         ],
         tabs: [
